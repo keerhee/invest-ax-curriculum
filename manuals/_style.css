@@ -68,3 +68,12 @@ pre{background:#1a1a2e;color:#e6e9f2;padding:14px 16px;border-radius:8px;font-si
 .kpi-card{background:#0d0d0d;color:#fff;border-radius:10px;padding:14px 8px;text-align:center}
 .kpi-num{font-size:20px;font-weight:900;line-height:1.1}
 .kpi-lbl{font-size:10px;color:#888;margin-top:4px;line-height:1.4}
+
+/* hero source bar — GitHub / 강의노트 / 폴더 위젯 */
+.hero-bar{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:14px;font-size:11px}
+.hero-bar a{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:999px;
+  background:rgba(255,255,255,.07);color:#ddd;border:1px solid rgba(255,255,255,.18);
+  text-decoration:none;letter-spacing:.04em}
+.hero-bar a:hover{background:rgba(255,255,255,.14);border-color:#fff;color:#fff;text-decoration:none}
+.hero-bar a.primary{background:#fff;color:#0d0d0d;border-color:#fff}
+.hero-bar a.primary:hover{background:#e6e6e6;color:#0d0d0d}

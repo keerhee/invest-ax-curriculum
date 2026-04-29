@@ -49,8 +49,13 @@
   .curriculum{display:grid;grid-template-columns:1fr;gap:10px;margin:8px 0 12px}
   .week{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;
     padding:16px 20px;display:grid;grid-template-columns:60px 1fr auto;gap:18px;align-items:center;
-    transition:border-color .15s ease,transform .15s ease}
+    transition:border-color .15s ease,transform .15s ease;position:relative;cursor:pointer}
   .week:hover{border-color:var(--accent);transform:translateX(2px)}
+  .week:hover .body .ttl a{color:var(--accent)}
+  /* stretched link — ttl의 anchor가 카드 전체를 덮어 클릭 가능하게 */
+  .week .body .ttl a::before{content:'';position:absolute;inset:0;z-index:1}
+  /* open 영역은 위에 올려 폴더 링크가 카드 클릭과 분리되게 */
+  .week .open{position:relative;z-index:2}
   .week .wk{font-size:18px;font-weight:800;color:var(--accent);text-align:center}
   .week .body .ttl{font-size:15px;font-weight:700;color:var(--text);margin-bottom:3px}
   .week .body .desc{font-size:13px;color:var(--muted)}
@@ -59,7 +64,7 @@
     color:var(--accent-2);border:1px solid rgba(123,224,182,.3);font-weight:600;white-space:nowrap}
   .week.sp .wk{color:var(--warn)}
   .week.sp .badge{background:rgba(255,184,107,.12);color:var(--warn);border-color:rgba(255,184,107,.3)}
-  .week .body .ttl a{color:inherit;text-decoration:none}
+  .week .body .ttl a{color:inherit;text-decoration:none;position:relative}
   .week .body .ttl a:hover{color:var(--accent);text-decoration:none}
   @media (max-width:560px){.week{grid-template-columns:50px 1fr}.week .badge{grid-column:1/-1;justify-self:start;margin-top:6px}}
 

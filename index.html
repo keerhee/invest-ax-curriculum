@@ -53,9 +53,14 @@
   .week:hover{border-color:var(--accent);transform:translateX(2px)}
   .week:hover .body .ttl a{color:var(--accent)}
   /* stretched link — ttl의 anchor가 카드 전체를 덮어 클릭 가능하게 */
-  .week .body .ttl a::before{content:'';position:absolute;inset:0;z-index:1}
-  /* open 영역은 위에 올려 폴더 링크가 카드 클릭과 분리되게 */
-  .week .open{position:relative;z-index:2}
+  /* 카드 우측 hover시 화살표 표시 */
+  .week::after{content:'→';position:absolute;right:14px;top:50%;transform:translateY(-50%);
+    color:var(--muted);opacity:0;transition:all .2s ease;font-size:18px;pointer-events:none;z-index:0}
+  .week:hover::after{opacity:1;right:8px;color:var(--accent)}
+  /* 우측 open 영역은 화살표 위에 올림 + 패딩 */
+  .week .open{position:relative;z-index:2;padding-right:8px}
+  /* 키보드 포커스 표시 */
+  .week:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .week .wk{font-size:18px;font-weight:800;color:var(--accent);text-align:center}
   .week .body .ttl{font-size:15px;font-weight:700;color:var(--text);margin-bottom:3px}
   .week .body .desc{font-size:13px;color:var(--muted)}
@@ -152,7 +157,7 @@
     <h2>📚 커리큘럼 한눈에</h2>
 
     <div class="curriculum" style="margin-bottom:18px">
-      <div class="week" style="border-color:rgba(123,224,182,.35)">
+      <div class="week" style="border-color:rgba(123,224,182,.35)" data-href="manuals/00_main.html">
         <div class="wk" style="color:var(--accent-2)">📖</div>
         <div class="body">
           <div class="ttl"><a href="manuals/00_main.html">본 매뉴얼</a></div>
@@ -164,7 +169,7 @@
           <a href="https://github.com/keerhee/invest-ax-curriculum/blob/main/manuals/00_main.html" target="_blank" rel="noopener">📦 GitHub ↗</a>
         </div>
       </div>
-      <div class="week" style="border-color:rgba(255,184,107,.35)">
+      <div class="week" style="border-color:rgba(255,184,107,.35)" data-href="manuals/01_prereq.html">
         <div class="wk" style="color:var(--warn)">⚙️</div>
         <div class="body">
           <div class="ttl"><a href="manuals/01_prereq.html">사전 준비</a></div>
@@ -180,7 +185,7 @@
 
     <div class="curriculum">
 
-      <div class="week">
+      <div class="week" data-href="manuals/W1_data_collection.html">
         <div class="wk">W1</div>
         <div class="body">
           <div class="ttl"><a href="manuals/W1_data_collection.html">데이터 수집 자동화</a></div>
@@ -193,7 +198,7 @@
         </div>
       </div>
 
-      <div class="week">
+      <div class="week" data-href="manuals/W2_technical_indicators.html">
         <div class="wk">W2</div>
         <div class="body">
           <div class="ttl"><a href="manuals/W2_technical_indicators.html">기술적 지표 계산</a></div>
@@ -206,7 +211,7 @@
         </div>
       </div>
 
-      <div class="week">
+      <div class="week" data-href="manuals/W3_news_sentiment.html">
         <div class="wk">W3</div>
         <div class="body">
           <div class="ttl"><a href="manuals/W3_news_sentiment.html">뉴스 센티먼트 분석</a></div>
@@ -219,7 +224,7 @@
         </div>
       </div>
 
-      <div class="week">
+      <div class="week" data-href="manuals/W4_chart_vision.html">
         <div class="wk">W4</div>
         <div class="body">
           <div class="ttl"><a href="manuals/W4_chart_vision.html">차트 Vision + 3D Verdict</a></div>
@@ -232,7 +237,7 @@
         </div>
       </div>
 
-      <div class="week">
+      <div class="week" data-href="manuals/W5_scheduling_rag.html">
         <div class="wk">W5</div>
         <div class="body">
           <div class="ttl"><a href="manuals/W5_scheduling_rag.html">스케줄링 + Vector DB 기초</a></div>
@@ -245,7 +250,7 @@
         </div>
       </div>
 
-      <div class="week">
+      <div class="week" data-href="manuals/W6_hybrid_rag.html">
         <div class="wk">W6</div>
         <div class="body">
           <div class="ttl"><a href="manuals/W6_hybrid_rag.html">Hybrid RAG 실전</a></div>
@@ -258,7 +263,7 @@
         </div>
       </div>
 
-      <div class="week">
+      <div class="week" data-href="manuals/W7_multi_agent.html">
         <div class="wk">W7</div>
         <div class="body">
           <div class="ttl"><a href="manuals/W7_multi_agent.html">멀티 에이전트</a></div>
@@ -271,7 +276,7 @@
         </div>
       </div>
 
-      <div class="week">
+      <div class="week" data-href="manuals/W8_paper_trading.html">
         <div class="wk">W8</div>
         <div class="body">
           <div class="ttl"><a href="manuals/W8_paper_trading.html">Paper Trading + 수료</a></div>
@@ -284,7 +289,7 @@
         </div>
       </div>
 
-      <div class="week sp">
+      <div class="week sp" data-href="manuals/SP_kis_korea.html">
         <div class="wk">SP</div>
         <div class="body">
           <div class="ttl"><a href="manuals/SP_kis_korea.html">한국투자증권 모의투자 (특별세션)</a></div>
@@ -369,5 +374,22 @@
   </footer>
 
 </div>
+
+<script>
+  document.querySelectorAll('.week[data-href]').forEach(card => {
+    card.tabIndex = 0;
+    card.setAttribute('role', 'link');
+    card.addEventListener('click', e => {
+      if (e.target.closest('a')) return;  // anchor 클릭은 anchor가 처리
+      window.location = card.dataset.href;
+    });
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        window.location = card.dataset.href;
+      }
+    });
+  });
+</script>
 </body>
 </html>

@@ -163,6 +163,166 @@ score: {{c.score}} | key: {{c.signals}} | 근거: {{c.reason}}
   </div>
 </section>
 
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- 💎 BONUS: NotebookLM 8차원 분석 → 종합 투자 보고서 → Gmail+Slack -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<section style="border-top:3px double #d97706;padding-top:30px;margin-top:30px">
+  <div class="eyebrow" style="color:#d97706">💎 Bonus Session</div>
+  <h2>NotebookLM 8차원 분석 → 종합 투자 보고서 → Gmail+Slack 발송</h2>
+  <p>본편 W7은 Price/News/Chart 3 Sub-Agent였습니다. 보너스에서는 <strong>타민더마켓의 NotebookLM 전용 주식 분석 프롬프트</strong>를 n8n 워크플로우로 옮겨, <strong>8개 분석 차원의 Sub-Agent를 병렬 실행</strong>해 한 종목에 대한 종합 투자 보고서를 자동 생성하고 이메일·슬랙으로 발송합니다.</p>
+
+  <div class="callout info">
+    <strong>출처</strong>: <em>타민더마켓 © 2025 — "노트북LM 전용 주식 분석 프롬프트 모음"</em>
+    (<a href="https://www.youtube.com/@타민더마켓" target="_blank" rel="noopener">유튜브 '타민더마켓'</a>).
+    원문은 NotebookLM에 PDF/링크를 업로드하고 채팅 프롬프트로 분석하는 수동 흐름입니다. 본 보너스는 동일 프롬프트를 n8n + Claude API + W6 Hybrid RAG로 <strong>완전 자동화</strong>한 응용입니다.
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">3-Stage</div>
+  <h2>1. 타민더마켓 3단계 프로세스 → 우리 워크플로우 매핑</h2>
+  <table>
+    <thead><tr><th>단계</th><th>원본 (NotebookLM 수동)</th><th>우리 자동화 (n8n)</th></tr></thead>
+    <tbody>
+      <tr><td>1️⃣ 소스 찾기</td><td>ChatGPT/Perplexity로 SEC 10-K, 어닝콜 transcript, 증권사 리포트, 산업 리포트 URL 수집</td><td><strong>W6 HybridRAG</strong> 또는 별도 Drive 폴더에 PDF 적재 → 임베딩</td></tr>
+      <tr><td>2️⃣ 생각하기</td><td>NotebookLM 채팅에 8개 분석 프롬프트 던지기</td><td><strong>본 보너스 워크플로우</strong> — 8 Sub-Agent 병렬 실행</td></tr>
+      <tr><td>3️⃣ 만들기</td><td>인포그래픽 / 슬라이드 / 오디오 오버뷰 산출물 생성</td><td><strong>Orchestrator</strong>가 HTML 보고서 1장으로 통합 → Gmail + Slack 발송</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <div class="eyebrow">8 Sub-Agents</div>
+  <h2>2. 8개 분석 차원 (Sub-Agent)</h2>
+  <p>각 Sub-Agent는 W6 HybridRAG에 자기 분야 프롬프트를 던져 <strong>출처 인용 답변</strong>을 받습니다. 모두 Claude Haiku로 저비용·병렬 실행.</p>
+  <table>
+    <thead><tr><th>#</th><th>Agent</th><th>입력 소스</th><th>핵심 산출물</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><strong>재무 트렌드</strong></td><td>10-K/10-Q 3~5년</td><td>매출·GM·OM·OCF·FCF·FCF마진 트렌드 표 + 변곡점 Top 3 + 원인 태그</td></tr>
+      <tr><td>2</td><td><strong>세그먼트</strong></td><td>10-K Segment</td><td>사업부별 매출·비중·마진 변화 + 믹스 영향 + 성장엔진 vs 부담</td></tr>
+      <tr><td>3</td><td><strong>경제적 해자</strong></td><td>10-K Business / Competition</td><td>Moat 식별 + Grade(A/B/C/D) + 침식 시그널 체크리스트</td></tr>
+      <tr><td>4</td><td><strong>Risk Factors</strong></td><td>10-K Risk Factors 3년</td><td>새로 추가/강화/삭제된 리스크 + Top 5 + 잠재 재무영향</td></tr>
+      <tr><td>5</td><td><strong>CEO 말바뀜</strong></td><td>어닝콜 transcript 8~12분기</td><td>약속 적중률 % + 말바뀜 패턴 + 변명 태그</td></tr>
+      <tr><td>6</td><td><strong>약속 이행</strong></td><td>주주서한 3년</td><td>전략 약속 추적 + 이행 상태 + 정직성 등급(A/B/C/D)</td></tr>
+      <tr><td>7</td><td><strong>반대의견 (Bear)</strong></td><td>모든 소스</td><td>투자 반대 논리 12개 + 치명적 Top 3 + 반증할 데이터 질문</td></tr>
+      <tr><td>8</td><td><strong>소스 갭</strong></td><td>업로드 소스 리스트</td><td>누락 데이터 (필수/권장) + 어디서 얻을지</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <div class="eyebrow">Workflow</div>
+  <h2>3. n8n 워크플로우 흐름</h2>
+  <div class="flow">
+    <div class="flow-title">매일 평일 08:00 — 분석큐에서 다음 ticker 1개 pick → 8 Agent 병렬 → Orchestrator → 보고서 발송</div>
+    <div class="flow-step"><span class="node n-trig">🔴 Trigger</span><span class="arrow">→</span>
+      <span class="flow-desc">Schedule Trigger · Cron <code>0 8 * * 1-5</code> (평일 08:00 KST) 또는 Webhook (수동 호출)</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 Pick Ticker</span><span class="arrow">→</span>
+      <span class="flow-desc">분석큐 시트에서 <strong>마지막 분석일이 가장 오래된</strong> ticker 1개 pick (라운드로빈 순환)</span></div>
+    <div class="flow-step"><span class="node n-logic">⚫ Fanout × 8</span><span class="arrow">→</span>
+      <span class="flow-desc">Code — 같은 ticker로 8개 Sub-Agent 병렬 호출 준비</span></div>
+    <div class="flow-step"><span class="node n-ai">🟣 Sub-Agent × 8</span><span class="arrow">→</span>
+      <span class="flow-desc">각 Agent가 W6 HybridRAG webhook 호출 (서로 다른 프롬프트) → 분석 결과 + 인용</span></div>
+    <div class="flow-step"><span class="node n-logic">⚫ Merge 8</span><span class="arrow">→</span>
+      <span class="flow-desc">8 결과 wait + 합치기 (Message Bus)</span></div>
+    <div class="flow-step"><span class="node n-ai">🟣 Orchestrator</span><span class="arrow">→</span>
+      <span class="flow-desc">Claude Sonnet — 8 분석 종합 + HTML 보고서 1장 생성 (인포그래픽 형식)</span></div>
+    <div class="flow-step"><span class="node n-out">🟢 Gmail</span><span class="arrow">→</span>
+      <span class="flow-desc">운용팀 메일링 리스트로 HTML 발송 (제목: [Daily Research] {{ticker}} 종합 분석 — {{날짜}})</span></div>
+    <div class="flow-step"><span class="node n-out">🟢 Slack</span><span class="arrow">→</span>
+      <span class="flow-desc">#research-daily 채널 — 핵심 결론 3줄 + Drive 링크 (전체 보고서)</span></div>
+    <div class="flow-step"><span class="node n-out">🟢 Sheets</span><span class="arrow">→</span>
+      <span class="flow-desc">보고서이력 시트에 timestamp / ticker / verdict / Gmail message_id append</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Report Template</div>
+  <h2>4. 종합 보고서 구조 (1페이지 인포그래픽)</h2>
+  <p>Orchestrator가 8 Sub-Agent 결과를 받아 다음 8섹션 HTML 보고서를 생성합니다:</p>
+  <ol>
+    <li><strong>Company Snapshot</strong> — 한 줄 설명 + 돈 버는 방식 3줄</li>
+    <li><strong>핵심 KPI 카드 8개</strong> — 매출, YoY, GM, OM, FCF, FCF마진, 순차입/현금, 자사주</li>
+    <li><strong>트렌드 하이라이트</strong> — 좋아진 것 3 / 나빠진 것 3 (Agent 1)</li>
+    <li><strong>해자 요약</strong> — Top 2~3 + Moat Grade (Agent 3)</li>
+    <li><strong>리스크 Top 5</strong> — 트리거 지표 포함 (Agent 4)</li>
+    <li><strong>경영진 신뢰도</strong> — 약속 적중률 + 말바뀜 패턴 (Agent 5+6)</li>
+    <li><strong>Bear Case</strong> — 가장 치명적 반대 논리 Top 3 (Agent 7)</li>
+    <li><strong>다음 분기 체크리스트</strong> — 선행지표 8개 + 질문 5개 + 누락 소스 (Agent 8)</li>
+  </ol>
+  <p>각 섹션의 모든 주장에는 <strong>[출처: 문서명/페이지]</strong> 형식으로 인용. 할루시네이션 차단.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Gmail Body</div>
+  <h2>5. Gmail HTML 본문 예시</h2>
+  <pre>제목: [Daily Research] AAPL 종합 분석 — 2026-04-29
+
+&lt;h1&gt;Apple Inc. (AAPL) — 주간 종합 분석&lt;/h1&gt;
+&lt;p&gt;⏰ 분석일: 2026-04-29 · 데이터 기준: 10-K 2024 + 10-Q 24Q4 + 어닝콜 12분기&lt;/p&gt;
+
+&lt;h2&gt;⚡ 한 줄 결론&lt;/h2&gt;
+&lt;p&gt;서비스 부문 +15% YoY로 마진 방어, 그러나 중국 매출 -8% 지속 [출처: 10-Q 24Q4 p.12]&lt;/p&gt;
+
+&lt;h2&gt;📊 KPI 8개 카드&lt;/h2&gt;
+... (인포그래픽 형식 표)
+
+&lt;h2&gt;🛡️ 해자 (Moat Grade: A-)&lt;/h2&gt;
+- 생태계 락인 (강) [출처: 10-K Business p.5]
+- 브랜드/가격결정력 (강)
+
+&lt;h2&gt;⚠️ Bear Case Top 3&lt;/h2&gt;
+1. iPhone 의존도 (매출 50%) — 신제품 사이클 둔화 시 직격
+... (반대의견 분석가 결과)
+
+&lt;h2&gt;✅ 다음 분기 체크리스트&lt;/h2&gt;
+- 서비스 ARPU
+- 중국 채널 인벤토리
+- Vision Pro 출하량
+...
+
+&lt;hr&gt;
+&lt;small&gt;프롬프트 출처: 타민더마켓 © 2025 · 자동 생성: n8n + Claude&lt;/small&gt;</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Slack Card</div>
+  <h2>6. Slack 메시지 예시 (#research-daily)</h2>
+  <pre>📊 *AAPL 일일 종합 분석 발행*  (2026-04-29)
+
+*결론*: 서비스 +15% YoY 강세, 중국 -8% 우려
+*Moat*: A- (생태계 락인 + 브랜드)
+*Bear Top 1*: iPhone 의존도 (매출 50%)
+*다음 체크*: 서비스 ARPU, 중국 채널 인벤토리
+
+📎 &lt;Drive 링크|전체 보고서&gt; · 📧 메일 발송 완료</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Bonus Missions</div>
+  <h2>💎 보너스 과제 5개</h2>
+  <div class="missions">
+    <div class="mission"><div class="num">1</div><div class="body"><div class="t">분석큐 시트 + 종목 1개 등록</div><div class="d">관심종목 5개를 우선순위 1~5로 등록. AAPL을 1순위로</div></div></div>
+    <div class="mission"><div class="num">2</div><div class="body"><div class="t">8 Sub-Agent 단독 검증</div><div class="d">한 ticker로 각 Sub-Agent를 단독 호출, 응답 JSON에 출처 인용이 포함되는지 확인</div></div></div>
+    <div class="mission"><div class="num">3</div><div class="body"><div class="t">Orchestrator HTML 검증</div><div class="d">8 Agent 결과를 Sonnet에 전달 → HTML 본문이 8섹션으로 정확히 생성되는지</div></div></div>
+    <div class="mission"><div class="num">4</div><div class="body"><div class="t">Gmail + Slack 발송 동시</div><div class="d">본인 메일과 #research-daily에 동시 도달 + 보고서이력 시트에 1행 append</div></div></div>
+    <div class="mission"><div class="num">5</div><div class="body"><div class="t">매일 평일 08:00 자동화</div><div class="d">Cron 활성화 → 평일 08:00마다 큐의 가장 오래된 ticker 1개 분석 + 발송 (라운드로빈)</div></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="callout warn">
+    <strong>비용 주의</strong> — 8 Sub-Agent(Haiku) + Orchestrator(Sonnet) ≈ <strong>$0.05/종목 · 1회</strong>. 매일 평일 1종목 × 22일 = 약 <strong>$1.1/월</strong>. 본편 W7보다 10배 깊지만 큐 기반 라운드로빈이라 종목당 분석 주기는 N영업일(N=큐 종목 수). 5종목이면 5영업일 주기.
+  </div>
+  <div class="callout info">
+    <strong>참조 자료</strong>:
+    <a href="https://github.com/keerhee/invest-ax-curriculum/tree/main/W7%20%EB%A9%80%ED%8B%B0%EC%97%90%EC%9D%B4%EC%A0%84%ED%8A%B8" target="_blank" rel="noopener">W7 폴더</a>의
+    <code>W7_BONUS_종합분석.json</code> (n8n 워크플로우) +
+    <code>W7_BONUS_분석큐.xlsx</code> (분석 우선순위 시트) +
+    <code>W7_BONUS_보고서이력.xlsx</code> (발송 이력).
+  </div>
+</section>
+
 <section>
   <div class="navbar">
     <a href="W6_hybrid_rag.html">← W6: Hybrid RAG</a>

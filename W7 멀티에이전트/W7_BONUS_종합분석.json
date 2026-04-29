@@ -1,0 +1,1056 @@
+{
+  "name": "W7 BONUS — NotebookLM 8차원 종합 분석 → Gmail+Slack (매일 08:00)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -800,
+        0
+      ],
+      "id": "de5d60bf-68a7-40d7-ad1f-68bc3113dcb7",
+      "name": "매일 08:00 평일"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "research-now",
+        "responseMode": "responseNode"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        200
+      ],
+      "id": "068f9c69-5341-4f12-a3b2-df252e922f38",
+      "name": "Webhook (수동)",
+      "webhookId": "b8b6d960-4399-4796-a72f-9638248644e2"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "분석큐"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -560,
+        100
+      ],
+      "id": "e921d804-d93c-49fb-8aa0-a7bf42551136",
+      "name": "Read 분석큐"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 분석큐에서 active=TRUE + last_analyzed가 가장 오래된 ticker 1개 선택 (라운드로빈)\nconst rows = items.map(it => it.json).filter(r => r.active === true || r.active === 'TRUE' || r.active === true);\nif (rows.length === 0) {\n  throw new Error('분석큐가 비어 있습니다. ticker 추가 필요.');\n}\nrows.sort((a, b) => {\n  const da = a.last_analyzed || '1900-01-01';\n  const db = b.last_analyzed || '1900-01-01';\n  return da.localeCompare(db);\n});\nconst pick = rows[0];\nreturn [{json:{\n  ticker: pick.ticker,\n  company: pick.company,\n  industry: pick.industry,\n  picked_at: new Date().toISOString(),\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        100
+      ],
+      "id": "d448344f-c18b-47a5-8271-c38d1391e699",
+      "name": "Pick 가장 오래된 ticker"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/qdrant-hybrid",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"question\": \"전체 종목 분석에 필요한 핵심 사실/숫자/리스크 발췌\", \"ticker\": \"={{$json.ticker}}\", \"top_k\": 30}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -80,
+        100
+      ],
+      "id": "f8508c87-a8f2-4cf6-85e2-162c8f4fdfbb",
+      "name": "Fetch RAG Context (W6)"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 같은 입력을 8개 Agent로 fanout\nconst ticker = $('Pick 가장 오래된 ticker').first().json.ticker;\nconst ragResp = $json;\nconst ctx = ragResp.context || ragResp.answer || JSON.stringify(ragResp).slice(0, 5000);\nconst agents = ['재무 트렌드','세그먼트','경제적 해자','Risk Factors','CEO 말바뀜','약속 이행','Bear Case (반대의견)','소스 갭'];\nreturn agents.map(name => ({json:{ ticker, agent: name, context: ctx }}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        100
+      ],
+      "id": "8a090fd9-bea0-4506-b4e3-d41840ea5c89",
+      "name": "Fanout × 8"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.agent}}",
+                    "rightValue": "재무 트렌드",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "재무 트렌드"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.agent}}",
+                    "rightValue": "세그먼트",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "세그먼트"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.agent}}",
+                    "rightValue": "경제적 해자",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "경제적 해자"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.agent}}",
+                    "rightValue": "Risk Factors",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Risk Factors"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.agent}}",
+                    "rightValue": "CEO 말바뀜",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CEO 말바뀜"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.agent}}",
+                    "rightValue": "약속 이행",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "약속 이행"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.agent}}",
+                    "rightValue": "Bear Case (반대의견)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Bear Case (반대의견)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.agent}}",
+                    "rightValue": "소스 갭",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "소스 갭"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        400,
+        100
+      ],
+      "id": "c5e38eb4-7fc6-41b2-b91c-7772030205f5",
+      "name": "Route to Agent"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PUT_YOUR_ANTHROPIC_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1500, \"messages\": [{\"role\": \"user\", \"content\": \"[재무 트렌드 분석가] 종목: {{$json.ticker}}\\n검색 결과(10-K/10-Q):\\n{{$json.context}}\\n\\n3~5년(또는 12~20분기) 기준으로 다음을 표로 정리하라:\\n- 매출, YoY, GM, OM, OCF, Capex, FCF, FCF마진, 주식수\\n- 변곡점 Top 3 + 원인 태그 [가격/물량][제품믹스][원가/공급망][마케팅/판관비][환율][일회성][규모][규제][매크로]\\n- 모든 주장에 [출처: 문서/페이지] 형식 인용 필수\\n\\nJSON으로만 응답:\\n{\\n  \\\"summary\\\": \\\"2~3줄 요약\\\",\\n  \\\"trend_table\\\": [{\\\"period\\\":\\\"...\\\",\\\"revenue\\\":\\\"...\\\",\\\"yoy\\\":\\\"...\\\",\\\"gm\\\":\\\"...\\\",\\\"om\\\":\\\"...\\\",\\\"fcf\\\":\\\"...\\\"}],\\n  \\\"inflections\\\": [{\\\"metric\\\":\\\"...\\\",\\\"when\\\":\\\"...\\\",\\\"cause_tag\\\":\\\"...\\\",\\\"source\\\":\\\"...\\\"}],\\n  \\\"leading_indicators\\\": [\\\"...\\\"]\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -350
+      ],
+      "id": "6befddc9-d059-4a26-9ff4-701acfca426f",
+      "name": "재무 트렌드"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PUT_YOUR_ANTHROPIC_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1500, \"messages\": [{\"role\": \"user\", \"content\": \"[세그먼트 분석가] 종목: {{$json.ticker}}\\n검색 결과(10-K Segment):\\n{{$json.context}}\\n\\n세그먼트별 매출/비중/마진 변화 + 믹스 영향 분석. 출처 인용 필수.\\n\\nJSON:\\n{\\n  \\\"segments\\\": [{\\\"name\\\":\\\"...\\\",\\\"revenue\\\":\\\"...\\\",\\\"yoy\\\":\\\"...\\\",\\\"share\\\":\\\"...\\\",\\\"margin\\\":\\\"...\\\",\\\"driver\\\":\\\"...\\\",\\\"source\\\":\\\"...\\\"}],\\n  \\\"growth_engine\\\": \\\"...\\\",\\n  \\\"drag\\\": \\\"...\\\",\\n  \\\"monitoring_kpi\\\": [\\\"...\\\"]\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -250
+      ],
+      "id": "1c332d95-b1d3-45d2-882b-4f10a7c6fa7f",
+      "name": "세그먼트"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PUT_YOUR_ANTHROPIC_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1500, \"messages\": [{\"role\": \"user\", \"content\": \"[Moat 분석가 — 버핏/멍거 스타일] 종목: {{$json.ticker}}\\n검색 결과(10-K Business / Competition):\\n{{$json.context}}\\n\\n해자 유형은 제한 없음. 후보 발굴 → 증거 강도(강/중/약) → Moat Grade(A/B/C/D). 출처 인용 필수.\\n\\nJSON:\\n{\\n  \\\"moat_grade\\\": \\\"A|B|C|D\\\",\\n  \\\"core_moats\\\": [{\\\"name\\\":\\\"...\\\",\\\"category\\\":\\\"...\\\",\\\"evidence_strength\\\":\\\"강|중|약\\\",\\\"reason\\\":\\\"...\\\",\\\"source\\\":\\\"...\\\"}],\\n  \\\"erosion_signals\\\": [\\\"...\\\"],\\n  \\\"competition_threats\\\": [{\\\"competitor\\\":\\\"...\\\",\\\"attack_path\\\":\\\"...\\\",\\\"source\\\":\\\"...\\\"}]\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -150
+      ],
+      "id": "a737b0a3-1cf5-45df-bd0b-94804c4c65df",
+      "name": "경제적 해자"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PUT_YOUR_ANTHROPIC_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1500, \"messages\": [{\"role\": \"user\", \"content\": \"[Risk Factors 분석가] 종목: {{$json.ticker}}\\n검색 결과(10-K Risk Factors 3년):\\n{{$json.context}}\\n\\n연도별 비교: (1) 새로 추가, (2) 표현 강화, (3) 삭제/완화 + 잠재 재무영향. 출처 인용 필수.\\n\\nJSON:\\n{\\n  \\\"newly_added\\\": [{\\\"risk\\\":\\\"...\\\",\\\"year\\\":\\\"...\\\",\\\"impact\\\":\\\"...\\\",\\\"source\\\":\\\"...\\\"}],\\n  \\\"intensified\\\": [{\\\"risk\\\":\\\"...\\\",\\\"change\\\":\\\"...\\\",\\\"source\\\":\\\"...\\\"}],\\n  \\\"removed_or_softened\\\": [{\\\"risk\\\":\\\"...\\\",\\\"year\\\":\\\"...\\\",\\\"source\\\":\\\"...\\\"}],\\n  \\\"top5_now\\\": [\\\"...\\\"],\\n  \\\"top5_recurring\\\": [\\\"...\\\"]\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -50
+      ],
+      "id": "aa7de2cc-1d87-4bb7-9cab-a7a5e497a84e",
+      "name": "Risk Factors"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PUT_YOUR_ANTHROPIC_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1500, \"messages\": [{\"role\": \"user\", \"content\": \"[CEO 말바뀜 탐지기] 종목: {{$json.ticker}}\\n검색 결과(어닝콜 transcript 8~12분기):\\n{{$json.context}}\\n\\n분기별 약속/가이던스/전제 vs 실제 결과 1:1 매칭. 판정: [맞음][부분][빗나감][철회/수정][측정불가].\\n말바뀜 유형 + 변명 태그. 적중률 % 산출.\\n\\nJSON:\\n{\\n  \\\"hit_rate_pct\\\": 0,\\n  \\\"tracking\\\": [{\\\"quarter\\\":\\\"...\\\",\\\"promise\\\":\\\"...\\\",\\\"actual\\\":\\\"...\\\",\\\"verdict\\\":\\\"맞음|부분|빗나감|철회/수정|측정불가\\\",\\\"spin_type\\\":\\\"...\\\",\\\"excuse_tags\\\":[\\\"...\\\"],\\\"source\\\":\\\"...\\\"}],\\n  \\\"frequent_spin_areas\\\": [\\\"...\\\"],\\n  \\\"common_excuses\\\": [\\\"...\\\"]\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        50
+      ],
+      "id": "1b53edfd-e7a3-4ed3-9605-76898f05cdda",
+      "name": "CEO 말바뀜"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PUT_YOUR_ANTHROPIC_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1500, \"messages\": [{\"role\": \"user\", \"content\": \"[경영진 약속 이행 검증 감사관] 종목: {{$json.ticker}}\\n검색 결과(주주서한 3년):\\n{{$json.context}}\\n\\n전략적 약속 추출 → 실행 증거 매칭 → 이행 상태(완료/진행중/지연/방향전환/중단). 정직성 등급(A/B/C/D).\\n\\nJSON:\\n{\\n  \\\"honesty_grade\\\": \\\"A|B|C|D\\\",\\n  \\\"promises\\\": [{\\\"promise\\\":\\\"...\\\",\\\"first_mentioned\\\":\\\"...\\\",\\\"status\\\":\\\"완료|진행중|지연|방향전환|중단|모호\\\",\\\"communication_tone\\\":\\\"솔직|부분 인정|회피|외부 탓\\\",\\\"source\\\":\\\"...\\\"}],\\n  \\\"best_kept_top3\\\": [\\\"...\\\"],\\n  \\\"biggest_misses_top3\\\": [\\\"...\\\"]\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        150
+      ],
+      "id": "bbb1971e-6a01-4281-845b-0e0c000f61b4",
+      "name": "약속 이행"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PUT_YOUR_ANTHROPIC_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1500, \"messages\": [{\"role\": \"user\", \"content\": \"[반대의견 분석가] 종목: {{$json.ticker}}\\n검색 결과(전체 소스):\\n{{$json.context}}\\n\\n이 종목에 투자하면 안 되는 이유 12개를 표로. 가장 치명적인 Top 3 별도 표시. 출처 인용 필수.\\n\\nJSON:\\n{\\n  \\\"bear_arguments\\\": [{\\\"argument\\\":\\\"...\\\",\\\"evidence\\\":\\\"...\\\",\\\"financial_impact\\\":\\\"매출|마진|FCF|자본조달\\\",\\\"disprove_with\\\":\\\"...\\\",\\\"source\\\":\\\"...\\\"}],\\n  \\\"most_dangerous_top3\\\": [{\\\"argument\\\":\\\"...\\\",\\\"why_critical\\\":\\\"...\\\",\\\"source\\\":\\\"...\\\"}]\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        250
+      ],
+      "id": "c14ce8fa-0d2a-41ff-80ab-8a1a5e3f19a6",
+      "name": "Bear Case (반대의견)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PUT_YOUR_ANTHROPIC_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1500, \"messages\": [{\"role\": \"user\", \"content\": \"[소스 갭 분석가] 종목: {{$json.ticker}}\\n검색 결과(현재 업로드된 소스):\\n{{$json.context}}\\n\\n주식 리서치에 꼭 필요한 데이터 중 누락 항목을 필수/권장으로 분류. 어디서 얻을 수 있는지.\\n\\nJSON:\\n{\\n  \\\"essential_missing\\\": [{\\\"item\\\":\\\"...\\\",\\\"why_needed\\\":\\\"...\\\",\\\"where_to_get\\\":\\\"10-K|10-Q|IR deck|Investor Day|transcript|경쟁사|산업리포트\\\"}],\\n  \\\"nice_to_have\\\": [{\\\"item\\\":\\\"...\\\",\\\"why_needed\\\":\\\"...\\\",\\\"where_to_get\\\":\\\"...\\\"}],\\n  \\\"next_questions\\\": [\\\"...\\\"]\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        350
+      ],
+      "id": "7ab188a7-ce46-47f1-88fd-72d89ea8ef8d",
+      "name": "소스 갭"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        920,
+        100
+      ],
+      "id": "c9f3fa5b-e8bd-4a34-bcda-15356ded5282",
+      "name": "Merge 8 Agents"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 8 Agent 응답에서 JSON 추출 + 통합\nfunction extractJson(content) {\n  if (!content) return {};\n  const txt = content?.[0]?.text || '';\n  const m = txt.match(/\\{[\\s\\S]*\\}/);\n  if (!m) return { raw: txt.slice(0, 500) };\n  try { return JSON.parse(m[0]); } catch (e) { return { raw: txt.slice(0, 500) }; }\n}\nconst combined = { ticker: '', sections: {} };\nfor (const it of items) {\n  const j = it.json;\n  // 어떤 Agent의 응답인지 — 직전 노드 이름으로 추정 어렵기 때문에 input.agent 보존 필요\n  // 실전: Agent별로 별도 키 보존하도록 prompt에 agent 라벨 포함시키거나 fanout 결과를 보존\n  const parsed = extractJson(j.content);\n  // Agent name이 응답에 들어있지 않으면 순서 기준\n  combined.sections[`agent_${Object.keys(combined.sections).length+1}`] = parsed;\n}\ncombined.ticker = $('Pick 가장 오래된 ticker').first().json.ticker;\ncombined.company = $('Pick 가장 오래된 ticker').first().json.company;\ncombined.analyzed_at = new Date().toISOString().slice(0,10);\nreturn [{json: combined}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        100
+      ],
+      "id": "af955e55-c60c-4d03-b45d-6db2bc814d17",
+      "name": "Aggregate Results"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PUT_YOUR_ANTHROPIC_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-sonnet-4-5-20250929\", \"max_tokens\": 1500, \"messages\": [{\"role\": \"user\", \"content\": \"[Orchestrator — 종합 보고서 작성자]\\n종목: {{$json.ticker}} ({{$json.company}})\\n분석일: {{$json.analyzed_at}}\\n\\n8 Sub-Agent 결과 (JSON):\\n{{ JSON.stringify($json.sections) }}\\n\\n위 결과를 통합해 운용팀 메일용 HTML 보고서 1장을 작성하라.\\n\\n구성 (8 섹션 고정):\\n1. <h2>⚡ 한 줄 결론</h2> — 30자\\n2. <h2>📊 KPI 8개 카드</h2> — 표 (재무 Agent 결과)\\n3. <h2>🛡️ 해자 (Moat Grade: ?)</h2> — 카드\\n4. <h2>⚠️ Risk Top 5</h2> — 표\\n5. <h2>👤 CEO 신뢰도</h2> — 적중률% + 정직성 등급\\n6. <h2>🐻 Bear Case Top 3</h2> — 가장 치명적 반대 논리\\n7. <h2>📂 세그먼트 동향</h2> — 성장엔진 vs 부담\\n8. <h2>✅ 다음 분기 체크리스트</h2> — 선행지표 + 누락 소스\\n\\n스타일: 인라인 CSS, 폰트 sans-serif, 표는 회색 헤더, 모든 주장에 [출처] 인용 필수.\\n응답은 HTML 본문만 (head/body 태그 X). 끝에 <hr><small>출처: 타민더마켓 © 2025 프롬프트 · 자동생성: n8n + Claude</small>\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        100
+      ],
+      "id": "20a88346-7f8a-4fbf-a4f6-d3af7aebed5e",
+      "name": "Orchestrator (보고서)"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Claude 응답 → HTML 추출 + Slack 요약\nconst content = $json.content?.[0]?.text || '';\nconst ticker = $('Aggregate Results').first().json.ticker;\nconst date = $('Aggregate Results').first().json.analyzed_at;\n\n// HTML은 그대로\nconst html = content;\n\n// Slack용 짧은 요약 추출 (h2 첫 줄들)\nconst headings = [...content.matchAll(/<h2>([^<]+)<\\/h2>/g)].map(m => m[1]);\nconst summary = headings.slice(0, 4).join('\\n• ');\n\nreturn [{json:{\n  ticker, date,\n  html_body: html,\n  email_subject: `[Daily Research] ${ticker} 종합 분석 — ${date}`,\n  slack_text: `📊 *${ticker} 일일 종합 분석 발행* (${date})\\n• ${summary}\\n📎 메일 발송 완료`,\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        100
+      ],
+      "id": "869b8111-2242-4124-9d8c-56e16795d810",
+      "name": "Format Outputs"
+    },
+    {
+      "parameters": {
+        "sendTo": "PUT_YOUR_TEAM_MAILING_LIST",
+        "subject": "={{$json.email_subject}}",
+        "message": "={{$json.html_body}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1960,
+        -50
+      ],
+      "id": "cfee8dde-54ad-4555-9e0c-da8543e21d93",
+      "name": "Gmail Send",
+      "webhookId": "d4516f64-5ae2-494e-9bd3-a07b7ce320b8"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#research-daily",
+          "mode": "name"
+        },
+        "text": "={{$json.slack_text}}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1960,
+        100
+      ],
+      "id": "793707dc-e800-4783-9f85-dff1170ff890",
+      "name": "Slack Post"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=1",
+          "mode": "list",
+          "cachedResultName": "보고서이력"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1960,
+        250
+      ],
+      "id": "e537e871-4b99-4ffa-8514-13e1b8e43001",
+      "name": "Log 보고서이력"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "분석큐"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ticker": "={{$json.ticker}}",
+            "last_analyzed": "={{$json.date}}"
+          },
+          "matchingColumns": [
+            "ticker"
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1960,
+        400
+      ],
+      "id": "cb53565d-130b-43c4-a9ee-837a0c04f2fe",
+      "name": "Update 분석큐 last_analyzed"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "매일 08:00 평일": {
+      "main": [
+        [
+          {
+            "node": "Read 분석큐",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook (수동)": {
+      "main": [
+        [
+          {
+            "node": "Read 분석큐",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read 분석큐": {
+      "main": [
+        [
+          {
+            "node": "Pick 가장 오래된 ticker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick 가장 오래된 ticker": {
+      "main": [
+        [
+          {
+            "node": "Fetch RAG Context (W6)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RAG Context (W6)": {
+      "main": [
+        [
+          {
+            "node": "Fanout × 8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fanout × 8": {
+      "main": [
+        [
+          {
+            "node": "Route to Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route to Agent": {
+      "main": [
+        [
+          {
+            "node": "재무 트렌드",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "세그먼트",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "경제적 해자",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Risk Factors",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CEO 말바뀜",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "약속 이행",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bear Case (반대의견)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "소스 갭",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "재무 트렌드": {
+      "main": [
+        [
+          {
+            "node": "Merge 8 Agents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "세그먼트": {
+      "main": [
+        [
+          {
+            "node": "Merge 8 Agents",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "경제적 해자": {
+      "main": [
+        [
+          {
+            "node": "Merge 8 Agents",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Risk Factors": {
+      "main": [
+        [
+          {
+            "node": "Merge 8 Agents",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "CEO 말바뀜": {
+      "main": [
+        [
+          {
+            "node": "Merge 8 Agents",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "약속 이행": {
+      "main": [
+        [
+          {
+            "node": "Merge 8 Agents",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Bear Case (반대의견)": {
+      "main": [
+        [
+          {
+            "node": "Merge 8 Agents",
+            "type": "main",
+            "index": 6
+          }
+        ]
+      ]
+    },
+    "소스 갭": {
+      "main": [
+        [
+          {
+            "node": "Merge 8 Agents",
+            "type": "main",
+            "index": 7
+          }
+        ]
+      ]
+    },
+    "Merge 8 Agents": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Orchestrator (보고서)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orchestrator (보고서)": {
+      "main": [
+        [
+          {
+            "node": "Format Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Outputs": {
+      "main": [
+        [
+          {
+            "node": "Gmail Send",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack Post",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log 보고서이력",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update 분석큐 last_analyzed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d1a9e2db-7cb8-4f3d-903c-ba17366fa396",
+  "id": "ab2658fd-7f92-4c",
+  "tags": []
+}

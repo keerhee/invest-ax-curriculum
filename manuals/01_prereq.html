@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>투자 AX — 사전 준비</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="hero">
+  <div class="hero-badge">사전 준비 · 환경 셋업</div>
+  <h1>실습 사전 준비 — 계정·키·툴</h1>
+  <p class="hero-sub">n8n / Google / Claude / Supabase / Cohere / Alpha Vantage / Chart-IMG / Alpaca / KIS</p>
+</div>
+
+<div class="container">
+
+<section>
+  <div class="eyebrow">Checklist</div>
+  <h2>0. 발급 체크리스트 한 장</h2>
+  <table>
+    <thead><tr><th>항목</th><th>발급 위치</th><th>주차</th><th>비용</th></tr></thead>
+    <tbody>
+      <tr><td>n8n Cloud / Docker</td><td>n8n.io / Docker Hub</td><td>전 주차</td><td>무료 (트라이얼/오픈소스)</td></tr>
+      <tr><td>Google OAuth Client</td><td>Google Cloud Console</td><td>W1 ~</td><td>무료</td></tr>
+      <tr><td>Yahoo Finance / CoinGecko</td><td>공개 API</td><td>W1, W4</td><td>무료 (Rate limit 주의)</td></tr>
+      <tr><td>FRED API Key</td><td>fred.stlouisfed.org</td><td>W1</td><td>무료</td></tr>
+      <tr><td>Alpha Vantage Key</td><td>alphavantage.co</td><td>W3</td><td>무료 5 req/min</td></tr>
+      <tr><td>Anthropic Claude API</td><td>console.anthropic.com</td><td>W3, W4, W7</td><td>$5 무료 + 사용량</td></tr>
+      <tr><td>OpenAI Embeddings</td><td>platform.openai.com</td><td>W5, W6</td><td>$5 무료 크레딧</td></tr>
+      <tr><td>Supabase pgvector</td><td>supabase.com</td><td>W5, W6</td><td>무료 500MB</td></tr>
+      <tr><td>Cohere Rerank</td><td>cohere.com</td><td>W6</td><td>무료 1000 req/mo</td></tr>
+      <tr><td>Chart-IMG API</td><td>chart-img.com</td><td>W4</td><td>무료 한도</td></tr>
+      <tr><td>Alpaca Paper Key</td><td>alpaca.markets</td><td>W8</td><td>무료 (paper)</td></tr>
+      <tr><td>한국투자증권 모의</td><td>openapi.koreainvestment.com</td><td>SP</td><td>무료</td></tr>
+    </tbody>
+  </table>
+  <div class="callout warn">
+    <strong>총 예상 비용</strong> $10~$20 (대부분 무료 크레딧으로 커버). Claude Vision(W4)과 임베딩(W5~W6)이 비용의 80%.
+  </div>
+</section>
+
+<section>
+  <h2>1. n8n 설치 (둘 중 하나)</h2>
+  <h3>옵션 A — Docker Self-host (권장)</h3>
+  <pre>docker run -it --rm --name n8n \
+  -p 5678:5678 \
+  -v n8n_data:/home/node/.n8n \
+  n8nio/n8n</pre>
+  <p>브라우저에서 <code>http://localhost:5678</code> → 초기 계정 생성. 데이터는 docker volume에 영속 저장.</p>
+
+  <h3>옵션 B — n8n Cloud</h3>
+  <p><a href="https://n8n.io" target="_blank">n8n.io</a> 가입 → 14일 무료 트라이얼 → <code>https://your-workspace.app.n8n.cloud</code></p>
+</section>
+
+<section>
+  <h2>2. Google OAuth (W1, W2, W3 — Sheets 트리거)</h2>
+  <ol>
+    <li><a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a> → 새 프로젝트</li>
+    <li>API Library에서 <strong>Google Sheets API · Gmail API · Drive API</strong> 활성화</li>
+    <li>OAuth consent screen → External → 앱 이름 입력 → Test users에 본인 Gmail 추가</li>
+    <li>Credentials → Create OAuth client ID → Web application
+      <ul>
+        <li>Cloud: <code>https://oauth.n8n.cloud/oauth2/callback</code></li>
+        <li>Self-host: <code>http://localhost:5678/rest/oauth2-credential/callback</code></li>
+      </ul>
+    </li>
+    <li>Client ID/Secret을 n8n credential에 등록 → "Sign in with Google" 클릭 인증</li>
+  </ol>
+</section>
+
+<section>
+  <h2>3. Anthropic Claude (W3 분류 / W4 Vision / W7 에이전트)</h2>
+  <ol>
+    <li><a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> 가입 → $5 free credit</li>
+    <li>API Keys → Create Key → 발급 즉시 복사 (이후 마스킹)</li>
+    <li>n8n에 HTTP Request 노드로 호출 (Anthropic SDK 노드 미내장이면 HTTP로 직접):
+      <ul>
+        <li>URL: <code>https://api.anthropic.com/v1/messages</code></li>
+        <li>Header: <code>x-api-key: $key</code> · <code>anthropic-version: 2023-06-01</code></li>
+      </ul>
+    </li>
+    <li>모델 권장: 분류는 <code>claude-haiku-4-5-20251001</code> (저비용), Vision은 <code>claude-sonnet-4-5-20250929</code></li>
+  </ol>
+  <div class="callout info">Haiku 1k 토큰 ≈ $0.0008, Sonnet 1k 토큰 ≈ $0.003. W3 뉴스 1건당 약 0.0001 USD.</div>
+</section>
+
+<section>
+  <h2>4. Supabase pgvector (W5 첫 RAG)</h2>
+  <ol>
+    <li><a href="https://supabase.com" target="_blank">supabase.com</a> 가입 → 새 Project (region 가까운 곳)</li>
+    <li>SQL Editor에서:
+      <pre>create extension if not exists vector;
+
+create table embeddings (
+  id bigserial primary key,
+  content text,
+  metadata jsonb,
+  embedding vector(1536)
+);
+
+create index on embeddings using ivfflat (embedding vector_cosine_ops);</pre>
+    </li>
+    <li>Project Settings → API → <code>URL</code> + <code>service_role key</code> 복사</li>
+    <li>n8n에서 HTTP Request 또는 Supabase 노드로 insert/select</li>
+  </ol>
+</section>
+
+<section>
+  <h2>5. Cohere Rerank (W6 Hybrid)</h2>
+  <ol>
+    <li><a href="https://cohere.com" target="_blank">cohere.com</a> → Trial Key 발급 (무료 1000 req/month)</li>
+    <li>HTTP 호출:
+      <pre>POST https://api.cohere.com/v1/rerank
+{
+  "model": "rerank-multilingual-v3.0",
+  "query": "{{질문}}",
+  "documents": [{검색결과 5~20개}],
+  "top_n": 5
+}</pre>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <h2>6. Alpha Vantage (W3 뉴스)</h2>
+  <p><a href="https://www.alphavantage.co/support/#api-key" target="_blank">alphavantage.co</a> 무료 키 발급. 5 req/min · 500 req/day.</p>
+  <pre>GET https://www.alphavantage.co/query
+  ?function=NEWS_SENTIMENT
+  &tickers=AAPL,TSLA
+  &apikey={key}</pre>
+  <p>응답에 종목별 sentiment_score, relevance_score, ticker_sentiment 배열 포함 → W3 워크플로우가 그대로 사용.</p>
+</section>
+
+<section>
+  <h2>7. Chart-IMG (W4 차트 이미지)</h2>
+  <p><a href="https://chart-img.com" target="_blank">chart-img.com</a> 가입 → API Key. 차트 이미지를 PNG로 받아 Claude Vision에 첨부.</p>
+  <pre>GET https://api.chart-img.com/v2/tradingview/advanced-chart
+  ?symbol=NASDAQ:AAPL
+  &interval=1D
+  &theme=dark
+  &studies=RSI,MACD</pre>
+</section>
+
+<section>
+  <h2>8. Alpaca Paper (W8)</h2>
+  <ol>
+    <li><a href="https://alpaca.markets" target="_blank">alpaca.markets</a> 가입 → 좌측 메뉴 <strong>Paper Trading</strong> 전환</li>
+    <li>API Keys → Generate New Key → <code>APCA-API-KEY-ID</code> + <code>APCA-API-SECRET-KEY</code></li>
+    <li>Base URL <code>https://paper-api.alpaca.markets</code> · 현재가는 <code>https://data.alpaca.markets</code></li>
+  </ol>
+  <div class="callout danger">
+    🚫 <strong>실거래 키를 절대 n8n에 넣지 마세요.</strong> 학습은 paper만. 별도 이메일/계정으로 paper 발급 권장.
+  </div>
+</section>
+
+<section>
+  <h2>9. 한국투자증권 모의투자 (SP)</h2>
+  <ol>
+    <li><a href="https://openapi.koreainvestment.com" target="_blank">openapi.koreainvestment.com</a> 가입</li>
+    <li><strong>모의투자 신청</strong> (실 계좌 신청 X) → App Key/Secret 발급</li>
+    <li>접근 토큰 발급:
+      <pre>POST https://openapivts.koreainvestment.com:29443/oauth2/tokenP
+{
+  "grant_type":"client_credentials",
+  "appkey":"...",
+  "appsecret":"..."
+}</pre>
+    </li>
+    <li>주문 시 HashKey 서명 별도 — SP 가이드에서 상세 다룸</li>
+  </ol>
+</section>
+
+<section>
+  <h2>10. 트러블슈팅 빠른 참조</h2>
+  <table>
+    <thead><tr><th>증상</th><th>원인</th><th>해결</th></tr></thead>
+    <tbody>
+      <tr><td>Sheets 트리거 무반응</td><td>polling 주기 / OAuth 스코프</td><td>everyMinute 모드 + Sheets API 활성</td></tr>
+      <tr><td>Yahoo 429</td><td>분당 호출 초과</td><td>Wait 노드 1초 추가</td></tr>
+      <tr><td>Claude 400</td><td>모델명 오타 / message 포맷</td><td>모델 ID 확인, content 배열 형식</td></tr>
+      <tr><td>Supabase insert 실패</td><td>차원 불일치</td><td>vector(1536) ↔ embedding 길이 확인</td></tr>
+      <tr><td>Alpaca 403</td><td>실 키를 paper URL에 사용</td><td>키-URL 짝 맞추기</td></tr>
+      <tr><td>KIS 403</td><td>HashKey 누락</td><td>주문 API는 HashKey 필수</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <div class="navbar">
+    <a href="00_main.html">← 본 매뉴얼</a>
+    <a href="W1_data_collection.html">→ W1: 데이터 수집</a>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

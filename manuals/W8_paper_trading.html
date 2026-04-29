@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W8 — Paper Trading + 수료</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="hero">
+  <div class="hero-badge">Week 8 · 🟢 과제 5 · 수료</div>
+  <h1>Paper Trading + 수료</h1>
+  <p class="hero-sub">Alpaca · Risk Guards · Bracket Order · 학습 발표</p>
+</div>
+
+<div class="container">
+
+<section>
+  <div class="eyebrow">목표</div>
+  <h2>이번 주 목표 — End-to-End</h2>
+  <p>W7의 Orchestrator가 BUY_STRONG/SELL_STRONG을 낼 때 <strong>Risk Guards를 통과한 시그널만</strong> Alpaca paper 계좌에 자동 발주합니다. Bracket Order(진입+익절+손절 동시 등록)로 진입 즉시 출구도 정해둡니다.</p>
+  <div class="callout danger">
+    🚫 <strong>실거래 절대 금지.</strong> Alpaca paper-api URL과 paper credential만 사용. 실 키와 paper 키는 <strong>물리적으로 다른 계정</strong>에서 발급해 섞이지 않게.
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">4 Risk Guards</div>
+  <h2>4단계 Risk Guards</h2>
+  <table>
+    <thead><tr><th>가드</th><th>체크</th><th>위반 시</th></tr></thead>
+    <tbody>
+      <tr><td>1. 단일 종목 비중</td><td>이번 주문 후 단일 종목 비중 ≤ 10%</td><td>주문 취소 + Slack 경고</td></tr>
+      <tr><td>2. 일일 체결 횟수</td><td>당일 체결 ≤ 5건</td><td>당일 추가 주문 차단</td></tr>
+      <tr><td>3. 변동성 임계</td><td>20일 변동성 ≤ 5%</td><td>주문 수량 절반</td></tr>
+      <tr><td>4. DDL (Daily Drawdown Limit)</td><td>당일 평가손익 ≥ -2%</td><td>매수 전면 중단 (안전모드)</td></tr>
+    </tbody>
+  </table>
+  <p>4가지 모두 통과한 시그널만 Bracket Order로 발주. 하나라도 실패 시 사유와 함께 Slack 알림.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Bracket Order</div>
+  <h2>Bracket Order 구조</h2>
+  <pre>한 번의 주문에 3개 다리가 동시 등록:
+1. Entry — 시장가 또는 지정가 매수/매도
+2. Take Profit — +5% 수익 시 자동 매도
+3. Stop Loss  — -2% 손실 시 자동 매도
+
+→ 진입 직후부터 보호선이 살아있음 → 인간 개입 없이도 손실 한정</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Workflow</div>
+  <h2>워크플로우 흐름</h2>
+  <div class="flow">
+    <div class="flow-step"><span class="node n-trig">🔴 Trigger</span><span class="arrow">→</span>
+      <span class="flow-desc">W7 Orchestrator 결과 — verdict=BUY_STRONG/SELL_STRONG만</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 Position</span><span class="arrow">→</span>
+      <span class="flow-desc">Alpaca GET /v2/positions — 현재 포지션 조회</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 Account</span><span class="arrow">→</span>
+      <span class="flow-desc">Alpaca GET /v2/account — 잔고 + 일일 손익 조회</span></div>
+    <div class="flow-step"><span class="node n-logic">⚫ Risk × 4</span><span class="arrow">→</span>
+      <span class="flow-desc">Code — 4 가드 순차 체크, 첫 실패 시 short-circuit</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 Bracket</span><span class="arrow">→</span>
+      <span class="flow-desc">Alpaca POST /v2/orders — order_class=bracket</span></div>
+    <div class="flow-step"><span class="node n-out">🟢 Log+Notify</span><span class="arrow">→</span>
+      <span class="flow-desc">Sheets 주문이력 + Slack 발주 알림 (모의)</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">API</div>
+  <h2>Alpaca Bracket Order</h2>
+  <pre>POST https://paper-api.alpaca.markets/v2/orders
+APCA-API-KEY-ID: {KEY}
+APCA-API-SECRET-KEY: {SECRET}
+Content-Type: application/json
+
+{
+  "symbol": "AAPL",
+  "qty": 10,
+  "side": "buy",
+  "type": "market",
+  "time_in_force": "gtc",
+  "order_class": "bracket",
+  "take_profit": { "limit_price": "{{entry * 1.05}}" },
+  "stop_loss":   { "stop_price":  "{{entry * 0.98}}" }
+}</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Risk Guards Code</div>
+  <h2>Risk Guards JavaScript 골격</h2>
+  <pre>// 입력: {ticker, side, qty, price}, position[], account
+// 출력: {pass: true|false, failed_guard?, reason?}
+
+const orderValue = qty * price;
+const portfolioValue = +account.portfolio_value;
+
+// Guard 1: 단일 종목 비중 ≤ 10%
+const myPosVal = positions.filter(p =&gt; p.symbol===ticker)
+                          .reduce((s,p) =&gt; s + +p.market_value, 0);
+const newConcentration = (myPosVal + orderValue) / portfolioValue;
+if (newConcentration &gt; 0.10) {
+  return {pass:false, failed_guard:1, reason:`single ${(newConcentration*100).toFixed(1)}%`};
+}
+
+// Guard 2: 일일 체결 횟수 ≤ 5
+const todayFills = await getAlpacaFillsToday(); // helper
+if (todayFills.length &gt;= 5) {
+  return {pass:false, failed_guard:2, reason:`today ${todayFills.length} fills`};
+}
+
+// Guard 3: 변동성 ≤ 5%
+const vol20 = await get20DayVolatility(ticker); // helper from W2
+if (vol20 &gt; 0.05) {
+  // 수량 절반으로
+  qty = Math.floor(qty/2);
+}
+
+// Guard 4: DDL ≥ -2%
+const dailyPnL = (+account.equity - +account.last_equity) / +account.last_equity;
+if (dailyPnL &lt; -0.02 &amp;&amp; side === 'buy') {
+  return {pass:false, failed_guard:4, reason:`DDL ${(dailyPnL*100).toFixed(1)}%`};
+}
+
+return {pass:true, qty};</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Missions</div>
+  <h2>🟢 과제 5개 (수료)</h2>
+  <div class="missions">
+    <div class="mission"><div class="num">1</div><div class="body"><div class="t">Alpaca paper 발주 단독</div><div class="d">Risk Guards 없이 1주 매수 → 체결 확인 → 즉시 매도. 발주 흐름 검증</div></div></div>
+    <div class="mission"><div class="num">2</div><div class="body"><div class="t">Bracket Order</div><div class="d">+5% 익절 / -2% 손절 동시 등록. /v2/orders?nested=true로 다리 3개 확인</div></div></div>
+    <div class="mission"><div class="num">3</div><div class="body"><div class="t">4 Risk Guards 적용</div><div class="d">위 코드 적용 → 일부러 비중 11%인 시나리오 만들어 Guard 1 실패 메시지 확인</div></div></div>
+    <div class="mission"><div class="num">4</div><div class="body"><div class="t">W7 → W8 연결</div><div class="d">W7 Orchestrator의 BUY_STRONG 출력이 W8 트리거가 되도록 Execute Workflow 연결</div></div></div>
+    <div class="mission"><div class="num">5</div><div class="body"><div class="t">수료 발표</div><div class="d">본인의 자동 매매 리서치 시스템 1개월 paper 운용 결과를 README/슬라이드로 정리</div></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="callout green">
+    <strong>🎓 수료</strong><br>
+    여기까지 끝냈다면 본인은 시중에서 보기 드문 <strong>"전 과정을 자력으로 설명할 수 있는 자동매매 학습자"</strong>입니다. 다음 단계는:<br>
+    1. SP — KIS 모의투자로 한국 주식 적용<br>
+    2. 백테스트 라이브러리(backtrader, vectorbt) 학습<br>
+    3. Position Sizing (Kelly · 변동성 기반)<br>
+    4. 자동매매 심리 학습 (1개월 paper 손익 일지 작성)
+  </div>
+</section>
+
+<section>
+  <div class="navbar">
+    <a href="W7_multi_agent.html">← W7: 멀티 에이전트</a>
+    <a href="SP_kis_korea.html">→ SP: KIS 모의투자</a>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

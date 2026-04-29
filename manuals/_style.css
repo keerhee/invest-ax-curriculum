@@ -1,0 +1,70 @@
+/* 공통 스타일 — 모든 매뉴얼 HTML이 참조 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans KR',-apple-system,sans-serif;color:#0d0d0d;background:#fff;
+  font-size:14px;line-height:1.75;padding:0 0 80px}
+a{color:#1d4ed8;text-decoration:none} a:hover{text-decoration:underline}
+
+.hero{background:#0d0d0d;color:#fff;padding:48px 20px 40px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-80px;right:-80px;width:280px;height:280px;
+  border:1px solid rgba(255,255,255,.06);border-radius:50%}
+.hero-badge{display:inline-block;border:1px solid rgba(255,255,255,.18);border-radius:20px;
+  padding:5px 14px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin-bottom:14px}
+.hero h1{font-size:24px;font-weight:900;line-height:1.35;margin-bottom:8px;letter-spacing:-.3px}
+.hero-sub{font-size:12.5px;color:#888}
+
+.container{max-width:780px;margin:0 auto;padding:30px 20px}
+section{padding:24px 0;border-top:1px solid #e6e6e6}
+section:first-child{border-top:none;padding-top:8px}
+
+.eyebrow{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#6b6b6b;margin-bottom:6px}
+h2{font-size:19px;font-weight:900;margin-bottom:14px;letter-spacing:-.2px}
+h3{font-size:14px;font-weight:700;margin:18px 0 8px}
+p{color:#333;margin-bottom:10px;font-size:13px}
+ul,ol{padding-left:24px;margin-bottom:10px}
+li{margin:5px 0;font-size:13px}
+
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12.5px}
+th{background:#222;color:#fff;padding:9px 11px;text-align:left;font-size:10px;letter-spacing:.5px;font-weight:700}
+td{padding:9px 11px;border-bottom:1px solid #e6e6e6;vertical-align:top}
+tr:nth-child(even) td{background:#fafafa}
+
+code{background:#f0f0f0;padding:2px 7px;border-radius:3px;font-size:11.5px;font-family:Menlo,Consolas,monospace}
+pre{background:#1a1a2e;color:#e6e9f2;padding:14px 16px;border-radius:8px;font-size:12px;
+  overflow-x:auto;white-space:pre-wrap;word-break:break-all;font-family:Menlo,Consolas,monospace;line-height:1.55}
+
+.callout{padding:13px 16px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13px;line-height:1.65}
+.callout.gray{background:#f3f3f3;border-left:3px solid #0d0d0d}
+.callout.green{background:#f0fdf4;border-left:3px solid #15803d;color:#14532d}
+.callout.warn{background:#fff8ed;border-left:3px solid #d97706;color:#7c2d12}
+.callout.danger{background:#fef2f2;border-left:3px solid #dc2626;color:#7f1d1d}
+.callout.info{background:#eff6ff;border-left:3px solid #1d4ed8;color:#1e3a8a}
+
+/* n8n flow box */
+.flow{background:#fffbeb;border:1px solid #fcd34d;border-radius:11px;padding:14px;margin:14px 0}
+.flow-title{font-size:11px;font-weight:700;color:#92400e;margin-bottom:10px}
+.flow-step{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px}
+.node{padding:3px 9px;border-radius:5px;font-size:10px;font-weight:700;color:#fff;white-space:nowrap;flex-shrink:0}
+.n-trig{background:#dc2626} .n-act{background:#2563eb} .n-ai{background:#7c3aed}
+.n-out{background:#059669} .n-logic{background:#374151} .n-store{background:#0f766e}
+.arrow{color:#bbb;font-size:14px}
+.flow-desc{flex:1;font-size:11.5px;color:#78350f;line-height:1.5}
+
+/* mission cards */
+.missions{display:grid;grid-template-columns:1fr;gap:8px;margin:10px 0}
+.mission{background:#f9fafb;border:1px solid #e6e6e6;border-radius:8px;padding:12px 14px;display:grid;
+  grid-template-columns:32px 1fr;gap:10px;align-items:start}
+.mission .num{width:28px;height:28px;background:#0d0d0d;color:#fff;border-radius:50%;text-align:center;
+  font-weight:900;font-size:12px;line-height:28px}
+.mission .body .t{font-size:13px;font-weight:700;color:#0d0d0d;margin-bottom:3px}
+.mission .body .d{font-size:12px;color:#444;line-height:1.55}
+
+/* nav */
+.navbar{display:flex;justify-content:space-between;font-size:12px;padding:18px 0 0;border-top:1px solid #e6e6e6;margin-top:24px}
+.navbar a{color:#1d4ed8}
+
+/* kpi tiles */
+.kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+.kpi-card{background:#0d0d0d;color:#fff;border-radius:10px;padding:14px 8px;text-align:center}
+.kpi-num{font-size:20px;font-weight:900;line-height:1.1}
+.kpi-lbl{font-size:10px;color:#888;margin-top:4px;line-height:1.4}

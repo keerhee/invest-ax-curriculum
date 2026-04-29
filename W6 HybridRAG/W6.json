@@ -1,0 +1,368 @@
+{
+  "name": "W6 — Hybrid RAG 실전",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "search",
+        "responseMode": "responseNode"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "e7bc79f4-f383-46ef-bd0a-58b62b240b5f",
+      "name": "Webhook /search",
+      "webhookId": "3e6bcde1-e289-42b5-95ab-5c11c820ff9e"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "text-embedding-3-small"
+            },
+            {
+              "name": "input",
+              "value": "={{$json.body.question}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer PUT_YOUR_OPENAI_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -150,
+        -100
+      ],
+      "id": "7b0ea1f3-e2e9-4755-b59a-68908b066600",
+      "name": "Embed Question"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_SUPABASE.supabase.co/rest/v1/rpc/match_disclosures_vector",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query_embedding",
+              "value": "={{$json.data[0].embedding}}"
+            },
+            {
+              "name": "ticker_filter",
+              "value": "={{$node['Webhook /search'].json.body.ticker}}"
+            },
+            {
+              "name": "match_count",
+              "value": 20
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "PUT_YOUR_SUPABASE_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer PUT_YOUR_SUPABASE_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        100,
+        -100
+      ],
+      "id": "38874a9c-380c-43c4-bb83-cbd202d68580",
+      "name": "Vector Search"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_SUPABASE.supabase.co/rest/v1/rpc/match_disclosures_bm25",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query_text",
+              "value": "={{$node['Webhook /search'].json.body.question}}"
+            },
+            {
+              "name": "ticker_filter",
+              "value": "={{$node['Webhook /search'].json.body.ticker}}"
+            },
+            {
+              "name": "match_count",
+              "value": 20
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "PUT_YOUR_SUPABASE_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer PUT_YOUR_SUPABASE_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        100,
+        100
+      ],
+      "id": "eb4f314f-0c67-4c37-a65d-15185077987c",
+      "name": "BM25 Search"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 두 결과 합치고 dedup (id 기준)\nconst v = $('Vector Search').all().map(it => it.json).flat();\nconst b = $('BM25 Search').all().map(it => it.json).flat();\nconst seen = new Set();\nconst merged = [];\nfor (const r of [...v, ...b]) {\n  if (seen.has(r.id)) continue;\n  seen.add(r.id);\n  merged.push(r);\n}\nreturn merged.map(r => ({json: r}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        0
+      ],
+      "id": "fd9094aa-2480-4678-b45f-96d522e75f5b",
+      "name": "Merge & Dedup"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cohere.com/v1/rerank",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "rerank-multilingual-v3.0"
+            },
+            {
+              "name": "query",
+              "value": "={{$node['Webhook /search'].json.body.question}}"
+            },
+            {
+              "name": "documents",
+              "value": "={{$json.map(r => r.content)}}"
+            },
+            {
+              "name": "top_n",
+              "value": 5
+            },
+            {
+              "name": "return_documents",
+              "value": true
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer PUT_YOUR_COHERE_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        0
+      ],
+      "id": "7b7a1fa6-fe4b-404d-a897-0bc3647d8b05",
+      "name": "Cohere Rerank"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{$credentials.anthropicApi.apiKey}}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-sonnet-4-5-20250929\", \"max_tokens\": 1024, \"messages\": [{\"role\": \"user\", \"content\": \"검색 결과만으로 답하라. 모든 주장에 [숫자] 형식 출처 인용 필수.\\n\\n질문: {{$node['Webhook /search'].json.body.question}}\\n\\n검색결과 (top 5):\\n{{$json.results}}\\n\\n답변:\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        0
+      ],
+      "id": "8197d677-e149-4255-94d7-13dbf3f90280",
+      "name": "Claude Cite Answer"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1140,
+        0
+      ],
+      "id": "c8559864-73d9-42b8-807b-f20d6f8dd444",
+      "name": "Reply"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook /search": {
+      "main": [
+        [
+          {
+            "node": "Embed Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed Question": {
+      "main": [
+        [
+          {
+            "node": "Vector Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "BM25 Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vector Search": {
+      "main": [
+        [
+          {
+            "node": "Merge & Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BM25 Search": {
+      "main": [
+        [
+          {
+            "node": "Merge & Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge & Dedup": {
+      "main": [
+        [
+          {
+            "node": "Cohere Rerank",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cohere Rerank": {
+      "main": [
+        [
+          {
+            "node": "Claude Cite Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Cite Answer": {
+      "main": [
+        [
+          {
+            "node": "Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a3afdbf7-266e-426d-8f58-cfc3a931514f",
+  "id": "907236ae-67f0-4e",
+  "tags": []
+}

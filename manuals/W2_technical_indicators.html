@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W2 — 기술적 지표 계산</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="hero">
+  <div class="hero-badge">Week 2 · 🟢 과제 5</div>
+  <h1>기술적 지표 직접 구현</h1>
+  <p class="hero-sub">RSI · MA · 볼린저 밴드 · MACD — 라이브러리 없이 수식으로</p>
+</div>
+
+<div class="container">
+
+<section>
+  <div class="eyebrow">왜 직접 구현하는가</div>
+  <h2>이번 주 목표</h2>
+  <p>지표 라이브러리는 어디든 있습니다. 하지만 <strong>수식이 무엇을 보고 있는지 이해해야</strong> 신호를 해석할 수 있습니다. n8n Code 노드(JavaScript)로 4개 지표를 직접 계산하고, 결과를 Sheets에 append.</p>
+  <ul>
+    <li>입력: W1에서 누적된 <code>시세이력</code> 시트</li>
+    <li>출력: <code>지표이력</code> 시트 — 종목별 일자별 지표값</li>
+    <li>매일 W1 종료 직후 트리거 (Webhook 또는 W1의 마지막 노드에서 Execute Workflow)</li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Formulas</div>
+  <h2>핵심 수식</h2>
+
+  <h3>1. 단순 이동평균 (MA, Moving Average)</h3>
+  <pre>MA(n) = sum(close[t-n+1 ... t]) / n
+권장: MA20 (단기), MA60 (중기), MA120 (장기)</pre>
+
+  <h3>2. RSI (Relative Strength Index, 14일)</h3>
+  <pre>변화량 diff[t] = close[t] - close[t-1]
+gain = max(diff, 0)
+loss = max(-diff, 0)
+
+avg_gain = EMA(gain, 14)
+avg_loss = EMA(loss, 14)
+
+RS = avg_gain / avg_loss
+RSI = 100 - (100 / (1 + RS))
+
+해석: RSI &gt; 70 과매수 / RSI &lt; 30 과매도</pre>
+
+  <h3>3. 볼린저 밴드 (20일, 2σ)</h3>
+  <pre>middle = MA(close, 20)
+std    = stdev(close, 20)
+upper  = middle + 2*std
+lower  = middle - 2*std
+
+해석: close가 upper 돌파 → 단기 과열, lower 돌파 → 단기 과매도</pre>
+
+  <h3>4. MACD (12, 26, 9)</h3>
+  <pre>EMA12   = EMA(close, 12)
+EMA26   = EMA(close, 26)
+MACD    = EMA12 - EMA26
+Signal  = EMA(MACD, 9)
+Hist    = MACD - Signal
+
+해석: Hist가 0 위로 교차 → 매수 시그널, 0 아래 교차 → 매도 시그널</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Code</div>
+  <h2>n8n Code 노드 (JavaScript) 골격</h2>
+  <pre>// 입력: items = [{ticker, date, close}, ...] (티커별·날짜순 정렬)
+// 출력: items + RSI, MA20, MA60, BB_upper, BB_lower, MACD, Signal, Hist
+
+const byTicker = {};
+for (const it of items) {
+  const k = it.json.ticker;
+  if (!byTicker[k]) byTicker[k] = [];
+  byTicker[k].push(it.json);
+}
+
+const result = [];
+for (const ticker of Object.keys(byTicker)) {
+  const rows = byTicker[ticker].sort((a,b)=>a.date.localeCompare(b.date));
+  const closes = rows.map(r=>+r.close);
+
+  // MA helper
+  const ma = (arr, n, i) =&gt; i&lt;n-1 ? null : arr.slice(i-n+1, i+1).reduce((a,b)=&gt;a+b,0)/n;
+
+  // EMA helper
+  const ema = (arr, n) =&gt; {
+    const k = 2/(n+1); const out = []; let prev = arr[0];
+    for (let i=0; i&lt;arr.length; i++){ prev = i===0 ? arr[0] : arr[i]*k + prev*(1-k); out.push(prev); }
+    return out;
+  };
+
+  const ema12 = ema(closes, 12);
+  const ema26 = ema(closes, 26);
+  const macd  = closes.map((_,i)=&gt;ema12[i]-ema26[i]);
+  const sig   = ema(macd, 9);
+
+  for (let i=0; i&lt;rows.length; i++){
+    const win = closes.slice(Math.max(0,i-19), i+1);
+    const m20 = ma(closes, 20, i);
+    const std = Math.sqrt(win.reduce((s,v)=&gt;s+(v-m20)**2, 0)/win.length);
+    rows[i].MA20  = m20;
+    rows[i].BB_up = m20 ? m20+2*std : null;
+    rows[i].BB_lo = m20 ? m20-2*std : null;
+    rows[i].MACD  = macd[i];
+    rows[i].Signal= sig[i];
+    rows[i].Hist  = macd[i]-sig[i];
+    // RSI는 별도 함수로 (생략 — 매뉴얼에 전체 코드 동봉)
+  }
+  result.push(...rows.map(r =&gt; ({json: r})));
+}
+return result;</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Missions</div>
+  <h2>🟢 과제 5개</h2>
+  <div class="missions">
+    <div class="mission"><div class="num">1</div><div class="body"><div class="t">MA20만 먼저 구현</div><div class="d">가장 단순한 지표부터. 수식 1줄로 충분. close가 MA20 위/아래인지 컬럼 추가</div></div></div>
+    <div class="mission"><div class="num">2</div><div class="body"><div class="t">RSI 14 추가</div><div class="d">EMA를 본인 손으로 작성. avg_gain / avg_loss 0 분모 처리 주의</div></div></div>
+    <div class="mission"><div class="num">3</div><div class="body"><div class="t">볼린저 밴드</div><div class="d">표준편차 직접 계산. close가 upper/lower 돌파한 row만 별도 시트에 분리 저장</div></div></div>
+    <div class="mission"><div class="num">4</div><div class="body"><div class="t">MACD + 골든/데드 크로스 감지</div><div class="d">Hist가 0을 상향/하향 돌파한 그날을 체크해 별도 컬럼 <code>cross_signal</code></div></div></div>
+    <div class="mission"><div class="num">5</div><div class="body"><div class="t">검증 — 실제 차트와 비교</div><div class="d">TradingView에서 같은 종목·기간 지표를 본인 계산값과 비교. 오차 1% 이내</div></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="callout warn">
+    <strong>주의 — 종목별 분리 처리</strong><br>
+    여러 종목 데이터를 하나의 배열로 다루면 RSI/MACD가 종목 경계를 넘어 계산됩니다. 반드시 ticker별로 그룹화 후 각각 계산.
+  </div>
+</section>
+
+<section>
+  <div class="navbar">
+    <a href="W1_data_collection.html">← W1: 데이터 수집</a>
+    <a href="W3_news_sentiment.html">→ W3: 뉴스 센티먼트</a>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

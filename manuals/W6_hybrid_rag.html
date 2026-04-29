@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W6 — Hybrid RAG 실전</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="hero">
+  <div class="hero-badge">Week 6 · 🟢 과제 5</div>
+  <h1>Hybrid RAG 실전</h1>
+  <p class="hero-sub">PDF 임베딩 · BM25+Vector 하이브리드 · Cohere Rerank · 출처 인용 Q&amp;A</p>
+</div>
+
+<div class="container">
+
+<section>
+  <div class="eyebrow">목표</div>
+  <h2>이번 주 목표 — 정확도 끌어올리기</h2>
+  <p>W5의 단순 벡터 검색은 <strong>의미는 비슷하지만 정확한 숫자/날짜를 놓치는</strong> 약점이 있습니다. W6에서는:</p>
+  <ul>
+    <li>관심종목 사업보고서 PDF를 청크 단위로 임베딩</li>
+    <li>벡터 검색 + 키워드(BM25) 검색을 <strong>하이브리드</strong>로 결합</li>
+    <li>Cohere Rerank로 top-20 → top-5 재순위화</li>
+    <li>답변에 <strong>반드시 출처</strong> [종목·문서·페이지] 인용</li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Why Hybrid</div>
+  <h2>왜 하이브리드가 필요한가</h2>
+  <table>
+    <thead><tr><th>시나리오</th><th>벡터만</th><th>키워드만</th><th>하이브리드</th></tr></thead>
+    <tbody>
+      <tr><td>"매출이 어떻게 변했나?" (의미)</td><td>✅ 잘함</td><td>❌ 동의어 못 잡음</td><td>✅</td></tr>
+      <tr><td>"2024년 4분기 영업이익은?" (정확값)</td><td>❌ 비슷한 분기 섞임</td><td>✅ 정확</td><td>✅</td></tr>
+      <tr><td>"HBM3E" (고유명사)</td><td>❌ 일반화됨</td><td>✅ 정확</td><td>✅</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <div class="eyebrow">Workflow</div>
+  <h2>워크플로우 흐름 (질의)</h2>
+  <div class="flow">
+    <div class="flow-step"><span class="node n-trig">🔴 Trigger</span><span class="arrow">→</span>
+      <span class="flow-desc">Webhook — 자연어 질의 + ticker 필터</span></div>
+    <div class="flow-step"><span class="node n-ai">🟣 Embed</span><span class="arrow">→</span>
+      <span class="flow-desc">OpenAI 질의 임베딩</span></div>
+    <div class="flow-step"><span class="node n-store">🟢 Vector</span><span class="arrow">→</span>
+      <span class="flow-desc">Supabase top-20 cosine search (필터: ticker)</span></div>
+    <div class="flow-step"><span class="node n-store">🟢 BM25</span><span class="arrow">→</span>
+      <span class="flow-desc">Supabase ts_rank — 키워드 매칭 top-20 (병렬)</span></div>
+    <div class="flow-step"><span class="node n-logic">⚫ Merge</span><span class="arrow">→</span>
+      <span class="flow-desc">Code 노드 — 두 결과 dedup, 합집합 ~30건</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 Rerank</span><span class="arrow">→</span>
+      <span class="flow-desc">Cohere Rerank — top 5 재순위</span></div>
+    <div class="flow-step"><span class="node n-ai">🟣 Answer</span><span class="arrow">→</span>
+      <span class="flow-desc">Claude Sonnet — top-5를 컨텍스트로 인용 답변</span></div>
+    <div class="flow-step"><span class="node n-out">🟢 Reply</span><span class="arrow">→</span>
+      <span class="flow-desc">Slack — 답변 + [출처1, 출처2] 링크</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Schema</div>
+  <h2>Supabase 테이블 (W5 확장)</h2>
+  <pre>create table disclosures (
+  id bigserial primary key,
+  ticker text not null,
+  doc_type text,           -- '사업보고서'|'분기'|'주요공시'
+  doc_year int,
+  page int,
+  section text,
+  content text,
+  embedding vector(1536),
+  fts tsvector              -- 한국어 BM25용
+);
+
+-- 인덱스
+create index on disclosures using ivfflat (embedding vector_cosine_ops);
+create index on disclosures using gin (fts);
+
+-- Trigger로 fts 자동 생성
+create function disclosures_fts_trigger() returns trigger as $$
+begin
+  new.fts := to_tsvector('simple', new.content);
+  return new;
+end $$ language plpgsql;
+
+create trigger disclosures_fts_update before insert or update
+on disclosures for each row execute function disclosures_fts_trigger();</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Cohere</div>
+  <h2>Cohere Rerank 호출</h2>
+  <pre>POST https://api.cohere.com/v1/rerank
+Authorization: Bearer {COHERE_KEY}
+{
+  "model": "rerank-multilingual-v3.0",
+  "query": "{{사용자 질문}}",
+  "documents": [
+    "{{청크 본문 1}}", "{{청크 본문 2}}", ...
+  ],
+  "top_n": 5,
+  "return_documents": true
+}</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Answer Prompt</div>
+  <h2>인용 강제 프롬프트</h2>
+  <pre>너는 IR 자료 분석가다. 아래 검색 결과만으로 답변하고, 반드시 출처를 인용하라.
+
+질문: {{사용자 질문}}
+
+검색 결과 (top 5, 신뢰도 순):
+[1] {ticker} {doc_type} p.{page}: {content}
+[2] ...
+
+응답 규칙:
+- 검색 결과에 명시된 사실만 사용. 외부 지식 금지.
+- 모든 주장에 [숫자] 형식 출처 인용.
+- 검색 결과로 답할 수 없으면 "근거 부족" 명시.
+
+답변:</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Missions</div>
+  <h2>🟢 과제 5개</h2>
+  <div class="missions">
+    <div class="mission"><div class="num">1</div><div class="body"><div class="t">관심종목 1개 사업보고서 임베딩</div><div class="d">DART에서 사업보고서 PDF 다운로드 → 워크플로우 통과 → Supabase에 청크 수 확인</div></div></div>
+    <div class="mission"><div class="num">2</div><div class="body"><div class="t">벡터 검색 단독 검증</div><div class="d">"24년 R&amp;D 비용은?" 질의 → top-5 결과의 page 확인</div></div></div>
+    <div class="mission"><div class="num">3</div><div class="body"><div class="t">BM25 검색 추가</div><div class="d">같은 질의를 ts_rank로도 검색해 결과 비교 → 어느 쪽이 정확한지</div></div></div>
+    <div class="mission"><div class="num">4</div><div class="body"><div class="t">Rerank 효과 측정</div><div class="d">Rerank 적용/미적용 답변을 본인이 채점, 5건 중 몇 건 개선됐는지</div></div></div>
+    <div class="mission"><div class="num">5</div><div class="body"><div class="t">존재하지 않는 정보 질의</div><div class="d">PDF에 없는 내용 질의 시 "근거 부족" 응답하는지 검증 (할루시네이션 차단 확인)</div></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="navbar">
+    <a href="W5_scheduling_rag.html">← W5: 스케줄링 + RAG</a>
+    <a href="W7_multi_agent.html">→ W7: 멀티 에이전트</a>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

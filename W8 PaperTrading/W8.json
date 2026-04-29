@@ -1,0 +1,392 @@
+{
+  "name": "W8 — Paper Trading + Risk Guards",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trade",
+        "responseMode": "responseNode"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "db839fb0-a118-4338-97cb-0a335733cbca",
+      "name": "Webhook /trade",
+      "webhookId": "d2a1db51-7074-47fd-9415-c9f88fd5fc53"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://paper-api.alpaca.markets/v2/account",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "APCA-API-KEY-ID",
+              "value": "PUT_YOUR_KEY"
+            },
+            {
+              "name": "APCA-API-SECRET-KEY",
+              "value": "PUT_YOUR_SECRET"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -150,
+        -100
+      ],
+      "id": "00a06569-d703-46c5-bde1-a8ff4012ab71",
+      "name": "Alpaca Account"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://paper-api.alpaca.markets/v2/positions",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "APCA-API-KEY-ID",
+              "value": "PUT_YOUR_KEY"
+            },
+            {
+              "name": "APCA-API-SECRET-KEY",
+              "value": "PUT_YOUR_SECRET"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -150,
+        100
+      ],
+      "id": "7112f0cb-42a7-4a6a-bf15-9905f2317cac",
+      "name": "Alpaca Positions"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 4단계 가드 순차 체크\nconst order = $('Webhook /trade').first().json.body;\nconst acc = $('Alpaca Account').first().json;\nconst positions = $('Alpaca Positions').first().json || [];\n\nconst orderValue = order.qty * order.price;\nconst portfolioValue = parseFloat(acc.portfolio_value);\n\n// G1: 단일 종목 비중 ≤ 10%\nconst myVal = positions.filter(p => p.symbol === order.symbol)\n  .reduce((s, p) => s + parseFloat(p.market_value), 0);\nconst newConc = (myVal + orderValue) / portfolioValue;\nif (newConc > 0.10) {\n  return [{json:{pass:false, failed_guard:1, reason:`single ${(newConc*100).toFixed(1)}%`, ...order}}];\n}\n\n// G2: 일일 체결 횟수 (모의 — 실제는 /v2/orders?status=closed&after=today)\nconst todayCount = parseInt(acc.daytrade_count || 0);\nif (todayCount >= 5) {\n  return [{json:{pass:false, failed_guard:2, reason:`today ${todayCount} fills`, ...order}}];\n}\n\n// G3: 변동성 (모의 — 실제는 W2 지표이력에서 fetch)\nconst vol20 = order.vol20 || 0.03;\nlet qty = order.qty;\nif (vol20 > 0.05) qty = Math.floor(qty / 2);\n\n// G4: DDL ≥ -2%\nconst dailyPnL = (parseFloat(acc.equity) - parseFloat(acc.last_equity)) / parseFloat(acc.last_equity);\nif (dailyPnL < -0.02 && order.side === 'buy') {\n  return [{json:{pass:false, failed_guard:4, reason:`DDL ${(dailyPnL*100).toFixed(1)}%`, ...order}}];\n}\n\nreturn [{json:{pass:true, qty, ...order}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        100,
+        0
+      ],
+      "id": "eec32c60-aeca-4b77-b0c7-26494672d8db",
+      "name": "4 Risk Guards"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.pass}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        340,
+        0
+      ],
+      "id": "cb29d5bd-f9af-433a-8468-6d02ad099927",
+      "name": "Guards passed?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://paper-api.alpaca.markets/v2/orders",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "symbol",
+              "value": "={{$json.symbol}}"
+            },
+            {
+              "name": "qty",
+              "value": "={{$json.qty}}"
+            },
+            {
+              "name": "side",
+              "value": "={{$json.side}}"
+            },
+            {
+              "name": "type",
+              "value": "market"
+            },
+            {
+              "name": "time_in_force",
+              "value": "gtc"
+            },
+            {
+              "name": "order_class",
+              "value": "bracket"
+            },
+            {
+              "name": "take_profit",
+              "value": "={{ {limit_price: ($json.price * 1.05).toFixed(2)} }}"
+            },
+            {
+              "name": "stop_loss",
+              "value": "={{ {stop_price: ($json.price * 0.98).toFixed(2)} }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "APCA-API-KEY-ID",
+              "value": "PUT_YOUR_KEY"
+            },
+            {
+              "name": "APCA-API-SECRET-KEY",
+              "value": "PUT_YOUR_SECRET"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        580,
+        -100
+      ],
+      "id": "d13e8a02-2eea-41ec-a7a6-1a65083d12e0",
+      "name": "Alpaca Bracket Order"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "주문이력"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        820,
+        -100
+      ],
+      "id": "ed23e424-cc00-4d2b-b7f2-2255ec6aa5bb",
+      "name": "Append 주문이력 (성공)"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#trade",
+          "mode": "name"
+        },
+        "text": "=✅ {{$json.symbol}} {{$json.side}} {{$json.qty}}주 발주 완료 (paper)",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1060,
+        -100
+      ],
+      "id": "643b7ec0-00d6-410f-9a53-781e4d8c8453",
+      "name": "Slack 알림 (성공)"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "주문이력"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        580,
+        100
+      ],
+      "id": "e323c1e1-290a-4b4e-aaca-9658fca70d32",
+      "name": "Append 주문이력 (차단)"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#trade",
+          "mode": "name"
+        },
+        "text": "=🚫 {{$json.symbol}} 주문 차단 — Guard {{$json.failed_guard}}: {{$json.reason}}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        820,
+        100
+      ],
+      "id": "20343ff5-7276-4607-a422-91eabe796259",
+      "name": "Slack 알림 (차단)"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook /trade": {
+      "main": [
+        [
+          {
+            "node": "Alpaca Account",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Alpaca Positions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alpaca Account": {
+      "main": [
+        [
+          {
+            "node": "4 Risk Guards",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alpaca Positions": {
+      "main": [
+        [
+          {
+            "node": "4 Risk Guards",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 Risk Guards": {
+      "main": [
+        [
+          {
+            "node": "Guards passed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guards passed?": {
+      "main": [
+        [
+          {
+            "node": "Alpaca Bracket Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append 주문이력 (차단)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alpaca Bracket Order": {
+      "main": [
+        [
+          {
+            "node": "Append 주문이력 (성공)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack 알림 (성공)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append 주문이력 (차단)": {
+      "main": [
+        [
+          {
+            "node": "Slack 알림 (차단)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "278b6021-d47a-41a5-8330-ff5748561ea7",
+  "id": "faad2dd9-90db-41",
+  "tags": []
+}

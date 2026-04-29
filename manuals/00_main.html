@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>투자 AX — 본 매뉴얼</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="hero">
+  <div class="hero-badge">Course Main · 8주 + SP</div>
+  <h1>자기만의 자동 매매 리서치 시스템 구축</h1>
+  <p class="hero-sub">남이 만든 시그널을 사는 게 아니라, 데이터·지표·뉴스·차트·RAG를 직접 엮는다</p>
+</div>
+
+<div class="container">
+
+<section>
+  <div class="eyebrow">Why this course</div>
+  <h2>왜 이 과정인가</h2>
+  <p>시장에 자동매매 봇은 많지만 <strong>왜 그 신호가 발생했는지 직접 설명할 수 있는 개인 투자자는 드뭅니다.</strong> 본 과정은 라이브러리를 따라 치는 것이 아니라:</p>
+  <ul>
+    <li>RSI/MA/MACD 수식을 <strong>직접 손으로 구현</strong> → 지표가 무엇을 보고 있는지 이해</li>
+    <li>뉴스를 <strong>AI에게 분류시키기 전에</strong> 어떤 차원으로 분류할지 본인이 설계</li>
+    <li>차트를 <strong>이미지로 만들어 Vision AI</strong>에게 묻고, 답을 본인의 가격·뉴스 분석과 통합</li>
+    <li>사업보고서를 <strong>RAG로 인용</strong>하며 답하게 만들어 할루시네이션 차단</li>
+    <li>최종적으로 Risk Guards를 통과한 시그널만 <strong>모의계좌에 자동 발주</strong></li>
+  </ul>
+
+  <div class="callout green">
+    <strong>학습 결과물:</strong> 매일 아침 본인 메일로 "오늘의 시장 진단 + 추천 포지션 + Risk 통과한 매매 후보" 가 자동으로 도착하는 시스템 1세트.
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Curriculum</div>
+  <h2>📚 8주 + SP 커리큘럼</h2>
+  <table>
+    <thead><tr><th>주</th><th>주제</th><th>핵심 기술</th><th>과제</th></tr></thead>
+    <tbody>
+      <tr><td>W1</td><td>데이터 수집 자동화</td><td>CoinGecko · Yahoo Finance · FRED · Sheets</td><td>🟢 5</td></tr>
+      <tr><td>W2</td><td>기술적 지표 계산</td><td>RSI · MA · 볼린저 · MACD 수식 직접</td><td>🟢 5</td></tr>
+      <tr><td>W3</td><td>뉴스 센티먼트 분석</td><td>Alpha Vantage · Claude Haiku · 2D</td><td>🟢 5</td></tr>
+      <tr><td>W4</td><td>차트 Vision + 3D Verdict</td><td>Chart-IMG · Claude Vision · AI Agent</td><td>🟢 5</td></tr>
+      <tr><td>W5</td><td>스케줄링 + Vector DB 기초</td><td>Supabase pgvector · 첫 RAG · 멀티 Cron</td><td>🟢 5</td></tr>
+      <tr><td>W6</td><td>Hybrid RAG 실전</td><td>PDF 임베딩 · Cohere Rerank · 인용 Q&amp;A</td><td>🟢 5</td></tr>
+      <tr><td>W7</td><td>멀티 에이전트</td><td>Orchestrator + 3 Sub-Agents · Bus</td><td>🟢 5</td></tr>
+      <tr><td>W8</td><td>Paper Trading + 수료</td><td>Alpaca · Risk Guards · Bracket Order</td><td>🟢 5</td></tr>
+      <tr><td>SP</td><td>KIS 모의투자 (한국 주식)</td><td>OAuth · HashKey · 호가 단위</td><td>🟢</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <div class="eyebrow">3D Verdict</div>
+  <h2>핵심 컨셉 — 3차원 판단</h2>
+  <p>W4부터는 단일 신호가 아닌 <strong>3개 차원의 의견을 합쳐</strong> 매매 후보를 가려냅니다.</p>
+  <div class="kpi">
+    <div class="kpi-card"><div class="kpi-num">📊</div><div class="kpi-lbl">PRICE<br>가격·기술적 지표</div></div>
+    <div class="kpi-card"><div class="kpi-num">📰</div><div class="kpi-lbl">NEWS<br>뉴스 센티먼트</div></div>
+    <div class="kpi-card"><div class="kpi-num">📉</div><div class="kpi-lbl">CHART<br>Vision 패턴</div></div>
+  </div>
+  <p>3개 모두 같은 방향이면 강한 신호 (예: 매수). 어긋나면 보류. W7에서는 이 3개를 별도 에이전트로 분리해 Orchestrator가 종합합니다.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Color System</div>
+  <h2>n8n 노드 색상 규칙</h2>
+  <p>모든 워크플로우는 동일한 색상으로 노드를 구분합니다.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0">
+    <span class="node n-trig">🔴 Trigger</span>
+    <span class="node n-act">🔵 Action / HTTP</span>
+    <span class="node n-logic">⚫ Logic / Code</span>
+    <span class="node n-ai">🟣 AI (Claude/GPT)</span>
+    <span class="node n-store">🟢 Vector DB</span>
+    <span class="node n-out">🟢 Output (Mail/Slack)</span>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Safety</div>
+  <h2>⚠️ 안전 원칙</h2>
+  <div class="callout danger">
+    <strong>실거래 금지선</strong> — W7까지는 시그널 출력만, W8/SP는 paper/모의 자격증명만 사용. 실 발주 노드는 본 과정 종료 후 별도 백테스트·Position Sizing·DDL·심리 학습을 마친 후에만 추가하세요.
+  </div>
+  <ul>
+    <li>API Key는 모두 <strong>n8n credential</strong>에 저장. JSON export 시 자동 분리됨</li>
+    <li>Slack Webhook URL은 URL 자체가 인증 — GitHub commit 절대 금지</li>
+    <li>실거래 키와 모의 키는 <strong>물리적으로 다른 계정/이메일</strong>로 발급해 섞이지 않게</li>
+  </ul>
+</section>
+
+<section>
+  <div class="navbar">
+    <span></span>
+    <span><a href="01_prereq.html">→ 다음: 사전 준비</a></span>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

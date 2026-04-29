@@ -1,0 +1,220 @@
+{
+  "name": "W1 — 데이터 수집 자동화",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -300,
+        0
+      ],
+      "id": "9e9a21c5-b52b-4cda-8b9c-ffe991c70e3e",
+      "name": "매일 08:00"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "종목마스터"
+        },
+        "event": "rowAdded",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        200
+      ],
+      "id": "fc7c8702-6cf2-424f-a7b2-78bc836061b8",
+      "name": "종목마스터 read"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://query1.finance.yahoo.com/v8/finance/chart/{{$json.ticker}}?interval=1d&range=2d",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        -100
+      ],
+      "id": "2589a15c-1cb6-4ca5-ba7f-16dd92de16a5",
+      "name": "Yahoo Finance"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd,krw",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        50
+      ],
+      "id": "bb85f800-5c3b-4b3b-b44c-572b536f1ab3",
+      "name": "CoinGecko"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&api_key=PUT_YOUR_FRED_KEY&file_type=json&limit=1&sort_order=desc",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        200
+      ],
+      "id": "d37c8105-1f6c-4a7f-95c6-92185476d0d3",
+      "name": "FRED DGS10"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 3개 소스를 동일 스키마로 정규화\nconst today = new Date().toISOString().slice(0, 10);\nconst out = [];\n\n// Yahoo: chart.result[0].indicators.quote[0]\nfor (const it of $('Yahoo Finance').all()) {\n  const r = it.json?.chart?.result?.[0];\n  if (!r) continue;\n  const q = r.indicators.quote[0];\n  const last = q.close.length - 1;\n  out.push({\n    date: today,\n    ticker: r.meta.symbol,\n    open: q.open[last],\n    high: q.high[last],\n    low: q.low[last],\n    close: q.close[last],\n    volume: q.volume[last],\n    source: 'yahoo',\n  });\n}\n\n// CoinGecko\nconst cg = $('CoinGecko').first()?.json || {};\nfor (const id of Object.keys(cg)) {\n  out.push({\n    date: today,\n    ticker: id.toUpperCase() + '-USD',\n    open: null, high: null, low: null,\n    close: cg[id].usd,\n    volume: null,\n    source: 'coingecko',\n  });\n}\n\n// FRED — 단일 매크로 지표\nconst fred = $('FRED DGS10').first()?.json?.observations?.[0];\nif (fred) {\n  out.push({\n    date: fred.date,\n    ticker: 'DGS10',\n    open: null, high: null, low: null,\n    close: parseFloat(fred.value),\n    volume: null,\n    source: 'fred',\n  });\n}\n\nreturn out.map(json => ({json}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        50
+      ],
+      "id": "3c1b9e8e-bcd4-4ee8-9ac9-7f589abf2d7b",
+      "name": "Normalize & Merge"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "시세이력"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        540,
+        50
+      ],
+      "id": "32b1af58-9140-43ec-9156-e6d53b236bfb",
+      "name": "Append 시세이력"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "매일 08:00": {
+      "main": [
+        [
+          {
+            "node": "Yahoo Finance",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CoinGecko",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "FRED DGS10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Yahoo Finance": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CoinGecko": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FRED DGS10": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Merge": {
+      "main": [
+        [
+          {
+            "node": "Append 시세이력",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "44950d6a-ab99-48a4-a051-53ce3f71114f",
+  "id": "a8e4895f-de9f-43",
+  "tags": []
+}

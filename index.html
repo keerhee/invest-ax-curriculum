@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>투자 AX 업무혁신 — 개인 투자자 자동화 학습과정</title>
+<meta name="description" content="개인 투자자가 데이터·지표·뉴스·차트·RAG·Paper Trading까지 직접 엮어 자기만의 자동 매매 리서치 시스템을 구축하는 8주 + SP 커리큘럼">
+<style>
+  :root{
+    --bg:#0a0e1a;--bg-card:#141a2e;--border:#1f2742;
+    --text:#e6e9f2;--muted:#9aa3c7;
+    --accent:#5b8def;--accent-2:#7be0b6;--warn:#ffb86b;--danger:#ff6b8a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:linear-gradient(180deg,#080c18 0%,#0a0e1a 40%,#0d1430 100%);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR",Roboto,sans-serif;
+    line-height:1.65;min-height:100vh;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1040px;margin:0 auto;padding:64px 24px 96px}
+
+  .eyebrow{display:inline-block;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--accent-2);border:1px solid rgba(123,224,182,.35);
+    padding:6px 14px;border-radius:999px;background:rgba(123,224,182,.08);margin-bottom:22px}
+  h1{font-size:clamp(30px,5vw,48px);line-height:1.2;margin:0 0 16px;letter-spacing:-.01em;font-weight:800}
+  .lead{color:var(--muted);font-size:clamp(15px,1.6vw,18px);margin:0 0 36px;max-width:760px}
+  .lead strong{color:var(--text)}
+
+  .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 36px}
+  @media (max-width:720px){.meta{grid-template-columns:repeat(2,1fr)}}
+  .meta-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .meta-card .k{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .meta-card .v{font-size:15px;font-weight:600;color:var(--text)}
+
+  .toc{display:flex;flex-wrap:wrap;gap:8px 18px;color:var(--muted);font-size:14px;
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:14px 0;margin:0 0 36px}
+  .toc a{color:var(--muted)} .toc a:hover{color:var(--text)}
+
+  section{margin:0 0 48px}
+  h2{font-size:22px;font-weight:700;margin:0 0 18px;padding-left:12px;border-left:3px solid var(--accent)}
+  p{margin:0 0 12px;color:#cdd3eb}
+  ul{margin:0 0 12px;padding-left:22px;color:#cdd3eb} li{margin:5px 0}
+
+  .curriculum{display:grid;grid-template-columns:1fr;gap:10px;margin:8px 0 12px}
+  .week{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;
+    padding:16px 20px;display:grid;grid-template-columns:60px 1fr auto;gap:18px;align-items:center;
+    transition:border-color .15s ease,transform .15s ease}
+  .week:hover{border-color:var(--accent);transform:translateX(2px)}
+  .week .wk{font-size:18px;font-weight:800;color:var(--accent);text-align:center}
+  .week .body .ttl{font-size:15px;font-weight:700;color:var(--text);margin-bottom:3px}
+  .week .body .desc{font-size:13px;color:var(--muted)}
+  .week .body .tools{font-size:11.5px;color:#7d87ad;margin-top:5px}
+  .week .badge{font-size:11px;padding:4px 10px;border-radius:999px;background:rgba(123,224,182,.12);
+    color:var(--accent-2);border:1px solid rgba(123,224,182,.3);font-weight:600;white-space:nowrap}
+  .week.sp .wk{color:var(--warn)}
+  .week.sp .badge{background:rgba(255,184,107,.12);color:var(--warn);border-color:rgba(255,184,107,.3)}
+  .week a{display:contents;color:inherit}
+  @media (max-width:560px){.week{grid-template-columns:50px 1fr}.week .badge{grid-column:1/-1;justify-self:start;margin-top:6px}}
+
+  .goal-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:8px 0}
+  @media (max-width:720px){.goal-grid{grid-template-columns:1fr}}
+  .goal{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .goal .ic{font-size:22px;margin-bottom:6px}
+  .goal .t{font-weight:700;font-size:14px;margin-bottom:4px}
+  .goal .d{font-size:13px;color:var(--muted);line-height:1.55}
+
+  table{width:100%;border-collapse:collapse;background:var(--bg-card);border:1px solid var(--border);
+    border-radius:12px;overflow:hidden;font-size:14px}
+  th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--border)}
+  th{background:rgba(91,141,239,.08);color:var(--text);font-weight:600;font-size:12px;
+    letter-spacing:.08em;text-transform:uppercase}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:var(--accent);font-weight:600;white-space:nowrap}
+
+  .safety{background:rgba(255,107,138,.06);border:1px solid rgba(255,107,138,.3);
+    color:#ffd0db;padding:14px 16px;border-radius:10px;margin:0 0 32px;
+    font-size:13.5px;line-height:1.6}
+
+  .badge-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .badge{background:rgba(91,141,239,.12);border:1px solid rgba(91,141,239,.35);
+    color:var(--text);padding:5px 11px;border-radius:6px;font-size:12px;font-weight:500}
+
+  footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  footer a{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="eyebrow">투자 AX · 개인 투자자 자동화 학습</span>
+  <h1>자기만의 자동 매매<br>리서치 시스템을 직접 구축한다</h1>
+  <p class="lead">
+    남이 만든 시그널을 사는 게 아니라, <strong>내 손으로 데이터·지표·뉴스·차트·RAG를 엮어</strong>
+    8주 만에 자동 매매 리서치 시스템 1세트를 완성합니다. 모든 워크플로우는
+    <strong>n8n + 무료 API</strong>로 만들어 학습 비용 $20 이내.
+  </p>
+
+  <div class="safety">
+    ⚠️ <strong>안전 안내</strong> — W7까지는 시그널 출력만. W8 Paper Trading과 SP KIS는
+    <strong>반드시 모의 자격증명</strong>으로만 학습합니다. 실거래 자동매매는 별도의 백테스트·
+    Position Sizing·DDL·심리 학습이 필수입니다.
+  </div>
+
+  <div class="meta">
+    <div class="meta-card"><div class="k">Duration</div><div class="v">8주 + SP</div></div>
+    <div class="meta-card"><div class="k">과제</div><div class="v">총 45개 (각 주 5개)</div></div>
+    <div class="meta-card"><div class="k">학습시간</div><div class="v">60~70시간</div></div>
+    <div class="meta-card"><div class="k">예상 비용</div><div class="v">$10~$20 API</div></div>
+  </div>
+
+  <nav class="toc">
+    <a href="#curriculum">📚 커리큘럼</a>
+    <a href="#goals">🎯 학습 목표</a>
+    <a href="#tools">🛠️ 사용 도구</a>
+    <a href="#how">🚦 시작하기</a>
+    <a href="#safety">⚠️ 안전 가이드</a>
+  </nav>
+
+  <section id="curriculum">
+    <h2>📚 커리큘럼 한눈에</h2>
+    <div class="curriculum">
+
+      <a href="manuals/W1_data_collection.html"><div class="week">
+        <div class="wk">W1</div>
+        <div class="body">
+          <div class="ttl">데이터 수집 자동화</div>
+          <div class="desc">시세·매크로·환율 데이터를 무료 API로 매일 자동 수집해 본인 데이터레이크 구축</div>
+          <div class="tools">CoinGecko · Yahoo Finance · FRED · Google Sheets</div>
+        </div>
+        <div class="badge">🟢 과제 5</div>
+      </div></a>
+
+      <a href="manuals/W2_technical_indicators.html"><div class="week">
+        <div class="wk">W2</div>
+        <div class="body">
+          <div class="ttl">기술적 지표 계산</div>
+          <div class="desc">라이브러리 없이 RSI·MA·볼린저·MACD 수식을 n8n Code 노드로 직접 구현</div>
+          <div class="tools">RSI · MA · 볼린저 밴드 · MACD · 수식 직접 구현</div>
+        </div>
+        <div class="badge">🟢 과제 5</div>
+      </div></a>
+
+      <a href="manuals/W3_news_sentiment.html"><div class="week">
+        <div class="wk">W3</div>
+        <div class="body">
+          <div class="ttl">뉴스 센티먼트 분석</div>
+          <div class="desc">Alpha Vantage 뉴스 + Claude Haiku 분류로 종목별 시장 분위기 2차원 점수화</div>
+          <div class="tools">Alpha Vantage · Claude Haiku · 2차원 분석 (감정 × 영향도)</div>
+        </div>
+        <div class="badge">🟢 과제 5</div>
+      </div></a>
+
+      <a href="manuals/W4_chart_vision.html"><div class="week">
+        <div class="wk">W4</div>
+        <div class="body">
+          <div class="ttl">차트 Vision + 3D Verdict</div>
+          <div class="desc">Chart-IMG로 차트 이미지화 → Claude Vision이 패턴 분석 → 가격·뉴스·차트 3D 통합 판단</div>
+          <div class="tools">Chart-IMG · Claude Vision · AI Agent</div>
+        </div>
+        <div class="badge">🟢 과제 5</div>
+      </div></a>
+
+      <a href="manuals/W5_scheduling_rag.html"><div class="week">
+        <div class="wk">W5</div>
+        <div class="body">
+          <div class="ttl">스케줄링 + Vector DB 기초</div>
+          <div class="desc">Supabase pgvector에 첫 임베딩, 멀티 Cron으로 시간대별 자동 실행 골격 완성</div>
+          <div class="tools">Supabase pgvector · 첫 RAG · 멀티 스케줄</div>
+        </div>
+        <div class="badge">🟢 과제 5</div>
+      </div></a>
+
+      <a href="manuals/W6_hybrid_rag.html"><div class="week">
+        <div class="wk">W6</div>
+        <div class="body">
+          <div class="ttl">Hybrid RAG 실전</div>
+          <div class="desc">사업보고서·공시 PDF를 BM25+Vector 하이브리드로 검색 + Cohere Rerank + 출처 인용</div>
+          <div class="tools">PDF 임베딩 · Cohere Rerank · 출처 인용 Q&amp;A</div>
+        </div>
+        <div class="badge">🟢 과제 5</div>
+      </div></a>
+
+      <a href="manuals/W7_multi_agent.html"><div class="week">
+        <div class="wk">W7</div>
+        <div class="body">
+          <div class="ttl">멀티 에이전트</div>
+          <div class="desc">Orchestrator + Price/News/Chart 3개 Sub-Agent가 메시지 버스로 협업 → 최종 의견 도출</div>
+          <div class="tools">Orchestrator + 3 Sub-Agents · Message Bus</div>
+        </div>
+        <div class="badge">🟢 과제 5</div>
+      </div></a>
+
+      <a href="manuals/W8_paper_trading.html"><div class="week">
+        <div class="wk">W8</div>
+        <div class="body">
+          <div class="ttl">Paper Trading + 수료</div>
+          <div class="desc">Alpaca Paper에 4단계 Risk Guards 통과한 시그널만 Bracket Order로 자동 발주</div>
+          <div class="tools">Alpaca · Risk Guards · Bracket Order · 수료 발표</div>
+        </div>
+        <div class="badge">🟢 과제 5</div>
+      </div></a>
+
+      <a href="manuals/SP_kis_korea.html"><div class="week sp">
+        <div class="wk">SP</div>
+        <div class="body">
+          <div class="ttl">한국투자증권 모의투자 (특별세션)</div>
+          <div class="desc">KIS OpenAPI OAuth · HashKey 서명 · 한국 호가단위 처리로 KOSPI 종목 자동매매</div>
+          <div class="tools">OAuth · HashKey · 한국 주식 · 호가 단위</div>
+        </div>
+        <div class="badge">🟢 특별세션</div>
+      </div></a>
+
+    </div>
+  </section>
+
+  <section id="goals">
+    <h2>🎯 수강 후 갖게 되는 역량</h2>
+    <div class="goal-grid">
+      <div class="goal"><div class="ic">📊</div><div class="t">데이터 손에 잡기</div><div class="d">무료 API만으로 글로벌·한국 시세, 매크로, 뉴스를 매일 자동 수집</div></div>
+      <div class="goal"><div class="ic">🧮</div><div class="t">숫자 직접 계산</div><div class="d">RSI/MA/MACD 수식을 라이브러리 없이 구현 → 의미 이해</div></div>
+      <div class="goal"><div class="ic">🤖</div><div class="t">AI를 의사결정 도구로</div><div class="d">뉴스 센티먼트·차트 Vision·멀티 에이전트로 3차원 의견 도출</div></div>
+      <div class="goal"><div class="ic">📚</div><div class="t">지식 검색 시스템</div><div class="d">사업보고서·공시 PDF를 Hybrid RAG로 인용 답변</div></div>
+      <div class="goal"><div class="ic">📈</div><div class="t">Paper Trading 실전</div><div class="d">Risk Guards 통과 시그널만 모의계좌에 자동 Bracket Order</div></div>
+      <div class="goal"><div class="ic">🇰🇷</div><div class="t">한국 주식 대응</div><div class="d">KIS OpenAPI 모의투자로 KOSPI 호가단위·HashKey 처리</div></div>
+    </div>
+  </section>
+
+  <section id="tools">
+    <h2>🛠️ 사용 도구 (모두 무료 또는 무료 한도)</h2>
+    <div class="badge-row">
+      <span class="badge">n8n Cloud / Self-host</span>
+      <span class="badge">Yahoo Finance · CoinGecko · FRED</span>
+      <span class="badge">Alpha Vantage NEWS</span>
+      <span class="badge">Claude Haiku · Sonnet (Vision)</span>
+      <span class="badge">OpenAI Embeddings</span>
+      <span class="badge">Supabase pgvector</span>
+      <span class="badge">Cohere Rerank</span>
+      <span class="badge">Chart-IMG</span>
+      <span class="badge">Alpaca Paper</span>
+      <span class="badge">한국투자증권 모의투자</span>
+    </div>
+    <p style="font-size:13px;color:var(--muted)">예상 API 비용: 학습 전 과정 <strong>$10~$20</strong> (대부분 무료 크레딧으로 커버)</p>
+  </section>
+
+  <section id="how">
+    <h2>🚦 시작하기</h2>
+    <ol style="color:#cdd3eb">
+      <li><a href="manuals/00_main.html">본 매뉴얼</a> 읽기 — 전체 흐름과 학습 원칙</li>
+      <li><a href="manuals/01_prereq.html">사전 준비</a> 완료 — n8n / Google OAuth / Claude / Supabase / Alpaca 키 발급</li>
+      <li>W1부터 순서대로:
+        <ul>
+          <li>주차 매뉴얼 HTML로 흐름 이해</li>
+          <li>해당 폴더 <code>W*.json</code>을 n8n에 import</li>
+          <li>동봉 xlsx를 Google Sheets에 업로드 → Trigger에서 선택</li>
+          <li>Activate → 출력 검증 → 5개 과제 풀기</li>
+        </ul>
+      </li>
+      <li>W8 종료 시점에 본인의 자동 매매 리서치 시스템 1세트 보유 → 수료 발표</li>
+    </ol>
+  </section>
+
+  <section id="safety">
+    <h2>⚠️ 안전 가이드</h2>
+    <table>
+      <thead><tr><th>구분</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td>실거래 금지</td><td>본 과정으로는 실 발주 절대 금지. W8/SP는 paper/모의 자격증명만</td></tr>
+        <tr><td>키 관리</td><td>모든 API Key는 n8n credential에 저장. GitHub commit 금지</td></tr>
+        <tr><td>Risk Guards</td><td>W8 학습한 4단계 가드(단일 종목·일일 체결·변동성·DDL) 미적용 시 발주 X</td></tr>
+        <tr><td>심리 학습</td><td>자동매매로도 손실은 발생함. 자동화 = 면죄부 아님</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    <span>© 2026 · 투자 AX 업무혁신 — 학습용 자료</span>
+    <span><a href="https://github.com/keerhee/invest-automation-curriculum">참고 커리큘럼 ↗</a></span>
+  </footer>
+
+</div>
+</body>
+</html>

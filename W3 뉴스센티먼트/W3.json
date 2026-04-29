@@ -1,0 +1,288 @@
+{
+  "name": "W3 — 뉴스 센티먼트 분석",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "a52421bd-72fa-460e-bbc4-5fea16085a89",
+      "name": "매시간"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "return [\n  {json:{ticker:'AAPL'}},\n  {json:{ticker:'NVDA'}},\n  {json:{ticker:'MSFT'}},\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        0
+      ],
+      "id": "a3420a38-88ec-4c89-a2f6-75bfbfb72077",
+      "name": "관심종목 list"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={{$json.ticker}}&apikey=PUT_YOUR_AV_KEY&limit=10",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        60,
+        0
+      ],
+      "id": "a71bbc20-0dcd-48c1-9249-b0f04ee4bbf4",
+      "name": "Alpha Vantage NEWS"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// AV 응답 → 24h 이내 + relevance > 0.3 만 추출\nconst out = [];\nfor (const it of items) {\n  const feed = it.json.feed || [];\n  for (const n of feed) {\n    const ts = n.time_published; // YYYYMMDDTHHMMSS\n    const ageHr = (Date.now() - new Date(\n      ts.slice(0,4)+'-'+ts.slice(4,6)+'-'+ts.slice(6,8)+'T'+ts.slice(9,11)+':'+ts.slice(11,13)+':'+ts.slice(13,15)+'Z'\n    )) / 3600000;\n    if (ageHr > 24) continue;\n    const ts0 = n.ticker_sentiment?.[0];\n    if (!ts0 || parseFloat(ts0.relevance_score) < 0.3) continue;\n    out.push({json:{\n      ticker: ts0.ticker,\n      title: n.title,\n      summary: n.summary,\n      source: n.source,\n      url: n.url,\n      av_sentiment: parseFloat(ts0.ticker_sentiment_score),\n    }});\n  }\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        0
+      ],
+      "id": "f8890290-94f8-4a07-921f-e1da4a6d84a0",
+      "name": "Flatten + Filter"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{$credentials.anthropicApi.apiKey}}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1024, \"messages\": [{\"role\": \"user\", \"content\": \"너는 주식 뉴스 분석가다. 아래 뉴스가 종목 {{$json.ticker}}에 미치는 영향을 평가하라.\\n\\n제목: {{$json.title}}\\n요약: {{$json.summary}}\\n출처: {{$json.source}}\\n\\nJSON으로만 응답:\\n{\\n  \\\"sentiment\\\": -1.0~1.0,\\n  \\\"impact\\\": 0.0~1.0,\\n  \\\"category\\\": \\\"earnings|product|m&a|regulation|ceo|opinion|other\\\",\\n  \\\"reason\\\": \\\"한 문장 근거\\\"\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        540,
+        0
+      ],
+      "id": "228509e2-1f1a-49da-af4b-56fce7692363",
+      "name": "Claude Haiku 분류"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Claude 응답에서 JSON 추출 + 강도 계산\nconst out = [];\nfor (const it of items) {\n  const txt = it.json?.content?.[0]?.text || '{}';\n  const m = txt.match(/\\{[\\s\\S]*\\}/);\n  let parsed = {sentiment:0, impact:0, category:'other', reason:''};\n  if (m) { try { parsed = JSON.parse(m[0]); } catch(e) {} }\n  const src = $('Flatten + Filter').itemMatching(items.indexOf(it))?.json || {};\n  out.push({json:{\n    ...src,\n    claude_sentiment: parsed.sentiment,\n    claude_impact: parsed.impact,\n    category: parsed.category,\n    reason: parsed.reason,\n    signal_strength: Math.abs(parsed.sentiment) * parsed.impact,\n  }});\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ],
+      "id": "30445764-06dd-4ec5-aae7-f5f6821bd375",
+      "name": "Parse + Score"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "뉴스이력"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1020,
+        -100
+      ],
+      "id": "c3b6189b-ac76-4e98-a3b6-2cf777cb74ac",
+      "name": "Append 뉴스이력"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.signal_strength}}",
+              "rightValue": 0.5,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        100
+      ],
+      "id": "871f4492-83fb-4e0b-b324-c9c52a0585f1",
+      "name": "강한 신호?"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#news-alert",
+          "mode": "name"
+        },
+        "text": "=🔔 *{{$json.ticker}}* — {{$json.title}}\\n감정: {{$json.claude_sentiment}} · 영향도: {{$json.claude_impact}}\\n근거: {{$json.reason}}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1260,
+        100
+      ],
+      "id": "e3939b1c-2f9a-4358-8459-330df93a41a4",
+      "name": "Slack 알림"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "매시간": {
+      "main": [
+        [
+          {
+            "node": "관심종목 list",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "관심종목 list": {
+      "main": [
+        [
+          {
+            "node": "Alpha Vantage NEWS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alpha Vantage NEWS": {
+      "main": [
+        [
+          {
+            "node": "Flatten + Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten + Filter": {
+      "main": [
+        [
+          {
+            "node": "Claude Haiku 분류",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Haiku 분류": {
+      "main": [
+        [
+          {
+            "node": "Parse + Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse + Score": {
+      "main": [
+        [
+          {
+            "node": "Append 뉴스이력",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "강한 신호?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "강한 신호?": {
+      "main": [
+        [
+          {
+            "node": "Slack 알림",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fee97042-ce81-4f8e-9044-61131839b939",
+  "id": "30eb800a-2411-47",
+  "tags": []
+}

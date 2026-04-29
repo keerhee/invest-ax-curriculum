@@ -1,0 +1,136 @@
+{
+  "name": "W2 — 기술적 지표 계산",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -300,
+        0
+      ],
+      "id": "d2ac7235-8db9-430e-a9ae-24f308419a7e",
+      "name": "매일 08:30"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "시세이력"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -50,
+        0
+      ],
+      "id": "97884327-1343-4572-9643-d43665ba6730",
+      "name": "Read 시세이력"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 종목별로 group → 4개 지표 계산\nconst byT = {};\nfor (const it of items) {\n  const t = it.json.ticker;\n  (byT[t] ||= []).push(it.json);\n}\n\nconst ema = (arr, n) => {\n  const k = 2 / (n + 1);\n  const out = []; let prev = arr[0] ?? 0;\n  arr.forEach((v, i) => { prev = i === 0 ? v : v * k + prev * (1 - k); out.push(prev); });\n  return out;\n};\n\nconst result = [];\nfor (const t of Object.keys(byT)) {\n  const rows = byT[t].sort((a,b) => String(a.date).localeCompare(String(b.date)));\n  const closes = rows.map(r => parseFloat(r.close)).filter(v => !isNaN(v));\n  if (closes.length < 26) continue;\n\n  // RSI 14\n  const rsi = []; let avgG = 0, avgL = 0;\n  for (let i = 1; i < closes.length; i++) {\n    const d = closes[i] - closes[i-1];\n    const g = Math.max(d, 0), l = Math.max(-d, 0);\n    if (i <= 14) { avgG += g/14; avgL += l/14; }\n    else { avgG = (avgG*13 + g)/14; avgL = (avgL*13 + l)/14; }\n    if (i >= 14) {\n      const rs = avgL === 0 ? 100 : avgG/avgL;\n      rsi[i] = 100 - 100/(1+rs);\n    }\n  }\n\n  const ema12 = ema(closes, 12);\n  const ema26 = ema(closes, 26);\n  const macd = closes.map((_, i) => ema12[i] - ema26[i]);\n  const sig = ema(macd, 9);\n\n  for (let i = 0; i < rows.length; i++) {\n    const win = closes.slice(Math.max(0, i-19), i+1);\n    const m20 = i < 19 ? null : win.reduce((a,b)=>a+b, 0)/20;\n    const std = m20 ? Math.sqrt(win.reduce((s,v)=>s+(v-m20)**2, 0)/win.length) : null;\n    result.push({json: {\n      date: rows[i].date,\n      ticker: rows[i].ticker,\n      close: closes[i],\n      MA20: m20,\n      RSI14: rsi[i] ?? null,\n      BB_upper: m20 ? m20 + 2*std : null,\n      BB_lower: m20 ? m20 - 2*std : null,\n      MACD: macd[i],\n      Signal: sig[i],\n      Hist: macd[i] - sig[i],\n    }});\n  }\n}\nreturn result;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "cc7fdcd1-0872-43c6-b8bf-1d09ad607a9d",
+      "name": "Calc MA·RSI·BB·MACD"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "지표이력"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        500,
+        0
+      ],
+      "id": "7dc2428d-02a5-4e24-8978-6d51a4c23b24",
+      "name": "Append 지표이력"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "매일 08:30": {
+      "main": [
+        [
+          {
+            "node": "Read 시세이력",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read 시세이력": {
+      "main": [
+        [
+          {
+            "node": "Calc MA·RSI·BB·MACD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calc MA·RSI·BB·MACD": {
+      "main": [
+        [
+          {
+            "node": "Append 지표이력",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6270e2f6-98a2-46f2-b986-9ef17afd6ee1",
+  "id": "f4732796-7f9c-46",
+  "tags": []
+}

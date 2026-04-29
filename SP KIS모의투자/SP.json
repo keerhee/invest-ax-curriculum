@@ -1,0 +1,360 @@
+{
+  "name": "SP — KIS 모의투자 매수",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "kis-buy",
+        "responseMode": "responseNode"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "2a10b53c-f8f2-4914-bbba-bdaa04ab94b4",
+      "name": "Webhook /kis-buy",
+      "webhookId": "14a30a38-08ba-403b-8a85-7e31e44f848a"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openapivts.koreainvestment.com:29443/oauth2/tokenP",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            },
+            {
+              "name": "appkey",
+              "value": "PUT_YOUR_APPKEY"
+            },
+            {
+              "name": "appsecret",
+              "value": "PUT_YOUR_APPSECRET"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -150,
+        0
+      ],
+      "id": "7f612add-2a01-43eb-a27b-d46aeaa08d4e",
+      "name": "KIS Access Token"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 한국 주식 호가 단위 보정\nfunction snapToTick(price) {\n  let tick;\n  if (price < 2000) tick = 1;\n  else if (price < 5000) tick = 5;\n  else if (price < 20000) tick = 10;\n  else if (price < 50000) tick = 50;\n  else if (price < 200000) tick = 100;\n  else if (price < 500000) tick = 500;\n  else tick = 1000;\n  return Math.round(price / tick) * tick;\n}\nconst order = $('Webhook /kis-buy').first().json.body;\nconst token = $('KIS Access Token').first().json.access_token;\nreturn [{json:{\n  ...order,\n  price_snapped: snapToTick(order.price),\n  access_token: token,\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        100,
+        0
+      ],
+      "id": "433b8920-6137-4b5a-a513-3ea42b161449",
+      "name": "호가 단위 snap"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const x = $json;\nreturn [{json:{\n  body: {\n    CANO: 'PUT_YOUR_ACCOUNT_8DIGIT',\n    ACNT_PRDT_CD: '01',\n    PDNO: x.symbol,\n    ORD_DVSN: '00',  // 지정가\n    ORD_QTY: String(x.qty),\n    ORD_UNPR: String(x.price_snapped),\n  },\n  access_token: x.access_token,\n  symbol: x.symbol, qty: x.qty, price_snapped: x.price_snapped,\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        350,
+        0
+      ],
+      "id": "c3070173-e05e-46dc-bb3b-b42eed4a4609",
+      "name": "Build order body"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openapivts.koreainvestment.com:29443/uapi/hashkey",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "CANO",
+              "value": "={{$json.body.CANO}}"
+            },
+            {
+              "name": "ACNT_PRDT_CD",
+              "value": "={{$json.body.ACNT_PRDT_CD}}"
+            },
+            {
+              "name": "PDNO",
+              "value": "={{$json.body.PDNO}}"
+            },
+            {
+              "name": "ORD_DVSN",
+              "value": "={{$json.body.ORD_DVSN}}"
+            },
+            {
+              "name": "ORD_QTY",
+              "value": "={{$json.body.ORD_QTY}}"
+            },
+            {
+              "name": "ORD_UNPR",
+              "value": "={{$json.body.ORD_UNPR}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "appkey",
+              "value": "PUT_YOUR_APPKEY"
+            },
+            {
+              "name": "appsecret",
+              "value": "PUT_YOUR_APPSECRET"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        600,
+        0
+      ],
+      "id": "6e3e5455-6b4d-4bb0-85d6-3a8673163492",
+      "name": "KIS HashKey"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openapivts.koreainvestment.com:29443/uapi/domestic-stock/v1/trading/order-cash",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "CANO",
+              "value": "={{$node['Build order body'].json.body.CANO}}"
+            },
+            {
+              "name": "ACNT_PRDT_CD",
+              "value": "={{$node['Build order body'].json.body.ACNT_PRDT_CD}}"
+            },
+            {
+              "name": "PDNO",
+              "value": "={{$node['Build order body'].json.body.PDNO}}"
+            },
+            {
+              "name": "ORD_DVSN",
+              "value": "={{$node['Build order body'].json.body.ORD_DVSN}}"
+            },
+            {
+              "name": "ORD_QTY",
+              "value": "={{$node['Build order body'].json.body.ORD_QTY}}"
+            },
+            {
+              "name": "ORD_UNPR",
+              "value": "={{$node['Build order body'].json.body.ORD_UNPR}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "authorization",
+              "value": "=Bearer {{$node['Build order body'].json.access_token}}"
+            },
+            {
+              "name": "appkey",
+              "value": "PUT_YOUR_APPKEY"
+            },
+            {
+              "name": "appsecret",
+              "value": "PUT_YOUR_APPSECRET"
+            },
+            {
+              "name": "tr_id",
+              "value": "VTTC0802U"
+            },
+            {
+              "name": "hashkey",
+              "value": "={{$json.HASH}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        850,
+        0
+      ],
+      "id": "6c73c7d7-67da-49ed-9554-d8ea436fb7e5",
+      "name": "KIS Order Cash"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "KIS주문이력"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "6b55aa21-77da-494e-8569-c1558543bf42",
+      "name": "Append KIS 주문이력"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#kis-trade",
+          "mode": "name"
+        },
+        "text": "=🇰🇷 KIS 모의 매수 {{$node['Build order body'].json.symbol}} {{$node['Build order body'].json.qty}}주 @ {{$node['Build order body'].json.price_snapped}}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1340,
+        0
+      ],
+      "id": "718cfee6-082b-4bfc-9b52-31b5a7040617",
+      "name": "Slack 알림"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook /kis-buy": {
+      "main": [
+        [
+          {
+            "node": "KIS Access Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "KIS Access Token": {
+      "main": [
+        [
+          {
+            "node": "호가 단위 snap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "호가 단위 snap": {
+      "main": [
+        [
+          {
+            "node": "Build order body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build order body": {
+      "main": [
+        [
+          {
+            "node": "KIS HashKey",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "KIS HashKey": {
+      "main": [
+        [
+          {
+            "node": "KIS Order Cash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "KIS Order Cash": {
+      "main": [
+        [
+          {
+            "node": "Append KIS 주문이력",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append KIS 주문이력": {
+      "main": [
+        [
+          {
+            "node": "Slack 알림",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "70318406-71a4-4e87-a086-774cc38f3869",
+  "id": "1663008e-a60a-4a",
+  "tags": []
+}

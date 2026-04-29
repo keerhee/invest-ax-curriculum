@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W4 — 차트 Vision + 3D Verdict</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="hero">
+  <div class="hero-badge">Week 4 · 🟢 과제 5</div>
+  <h1>차트 Vision + 3D Verdict</h1>
+  <p class="hero-sub">Chart-IMG로 차트 캡처 → Claude Vision 패턴 분석 → 3D 통합 판단</p>
+</div>
+
+<div class="container">
+
+<section>
+  <div class="eyebrow">목표</div>
+  <h2>이번 주 목표 — 3차원 의견 통합</h2>
+  <p>지금까지 만든 3개 신호를 하나의 의견으로 합칩니다.</p>
+  <div class="kpi">
+    <div class="kpi-card"><div class="kpi-num">📊</div><div class="kpi-lbl">PRICE<br>(W2 지표)</div></div>
+    <div class="kpi-card"><div class="kpi-num">📰</div><div class="kpi-lbl">NEWS<br>(W3 센티먼트)</div></div>
+    <div class="kpi-card"><div class="kpi-num">📉</div><div class="kpi-lbl">CHART<br>(W4 Vision)</div></div>
+  </div>
+  <div class="callout green">
+    <strong>3D Verdict</strong> — 3개 신호 모두 같은 방향이면 강한 신호. 2개 일치는 중간 신호. 어긋나면 보류. W7에서 이 통합을 별도 에이전트들에게 위임할 준비.
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Workflow</div>
+  <h2>워크플로우 흐름</h2>
+  <div class="flow">
+    <div class="flow-step"><span class="node n-trig">🔴 Trigger</span><span class="arrow">→</span>
+      <span class="flow-desc">관심종목 시트 row + Cron 또는 Webhook</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 HTTP</span><span class="arrow">→</span>
+      <span class="flow-desc">Chart-IMG — RSI/MACD가 표시된 차트 PNG 받기</span></div>
+    <div class="flow-step"><span class="node n-ai">🟣 Vision</span><span class="arrow">→</span>
+      <span class="flow-desc">Claude Sonnet Vision — 차트 이미지 분석 (지지·저항·패턴)</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 Lookup</span><span class="arrow">→</span>
+      <span class="flow-desc">W2 지표이력 + W3 뉴스이력에서 같은 종목 최신 신호 fetch</span></div>
+    <div class="flow-step"><span class="node n-ai">🟣 Verdict</span><span class="arrow">→</span>
+      <span class="flow-desc">Claude — Price + News + Chart 3차원 통합 판단</span></div>
+    <div class="flow-step"><span class="node n-out">🟢 Output</span><span class="arrow">→</span>
+      <span class="flow-desc">Sheets <code>verdict</code> 시트 + Slack 알림 (강한 신호만)</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Chart-IMG</div>
+  <h2>차트 이미지 호출</h2>
+  <pre>GET https://api.chart-img.com/v2/tradingview/advanced-chart
+  ?symbol=KRX:005930
+  &interval=1D
+  &theme=dark
+  &width=1200&height=700
+  &studies=RSI,MACD,BB
+  &api_key={key}
+
+응답: image/png 바이너리 → n8n binary로 받아 Claude attachment로 전달</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Vision Prompt</div>
+  <h2>Claude Vision 프롬프트</h2>
+  <pre>(첨부된 차트 이미지 1장 + 텍스트)
+
+너는 차트 분석가다. 첨부된 일봉 차트(RSI·MACD·볼린저 포함)를 보고 분석하라.
+
+판정할 항목:
+1. 추세: uptrend / downtrend / sideways
+2. 패턴: head_shoulders / double_top / double_bottom / breakout / consolidation / none
+3. 지지선·저항선 가격대
+4. RSI/MACD가 보내는 신호
+5. 차트 관점 종합 의견: bullish / neutral / bearish (-1 ~ +1)
+
+JSON으로만 응답.</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Verdict Logic</div>
+  <h2>3D 통합 규칙 (간단 버전)</h2>
+  <pre>// 입력: priceScore, newsScore, chartScore (각 -1 ~ +1)
+// 출력: verdict, confidence
+
+const scores = [priceScore, newsScore, chartScore];
+const sum = scores.reduce((a,b)=&gt;a+b, 0);
+const avg = sum / 3;
+
+let verdict, confidence;
+if (Math.abs(avg) &lt; 0.2) {
+  verdict = "HOLD";
+  confidence = "low";
+} else if (scores.every(s =&gt; s &gt; 0.3)) {
+  verdict = "BUY_STRONG";
+  confidence = "high";
+} else if (scores.every(s =&gt; s &lt; -0.3)) {
+  verdict = "SELL_STRONG";
+  confidence = "high";
+} else if (avg &gt; 0) {
+  verdict = "BUY_WEAK";
+  confidence = "medium";
+} else {
+  verdict = "SELL_WEAK";
+  confidence = "medium";
+}
+return { verdict, confidence, avg, scores };</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Missions</div>
+  <h2>🟢 과제 5개</h2>
+  <div class="missions">
+    <div class="mission"><div class="num">1</div><div class="body"><div class="t">Chart-IMG 단독</div><div class="d">관심종목 1개로 차트 PNG 받아 본인 Drive에 저장 → 화면 확인</div></div></div>
+    <div class="mission"><div class="num">2</div><div class="body"><div class="t">Claude Vision 단독</div><div class="d">차트 이미지 1장을 Claude Sonnet에 첨부 호출, JSON 응답 받기</div></div></div>
+    <div class="mission"><div class="num">3</div><div class="body"><div class="t">3개 신호 fetch</div><div class="d">동일 ticker의 W2/W3/W4 최신 점수를 Code 노드 1개에서 모두 조회</div></div></div>
+    <div class="mission"><div class="num">4</div><div class="body"><div class="t">Verdict 통합</div><div class="d">위 코드를 적용해 verdict 시트에 ticker별 1행 출력</div></div></div>
+    <div class="mission"><div class="num">5</div><div class="body"><div class="t">강한 신호 5개 발굴</div><div class="d">관심종목 20개 돌려 BUY_STRONG/SELL_STRONG 5개 메일로 받기</div></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="callout warn">
+    <strong>비용 주의</strong> — Vision 1회 ≈ $0.01 (Sonnet 1k token + image). 20종목 × 매일 = $6/월. Cron 빈도 조절 또는 강한 신호 후보만 Vision 호출.
+  </div>
+</section>
+
+<section>
+  <div class="navbar">
+    <a href="W3_news_sentiment.html">← W3: 뉴스 센티먼트</a>
+    <a href="W5_scheduling_rag.html">→ W5: 스케줄링 + RAG</a>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

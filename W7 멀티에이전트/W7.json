@@ -1,0 +1,458 @@
+{
+  "name": "W7 — 멀티 에이전트",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "verdict-multi",
+        "responseMode": "responseNode"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "96029049-b3ec-4488-b322-a00c301c7cce",
+      "name": "Webhook /verdict",
+      "webhookId": "9c72aba6-2c2c-4ca4-abe0-4bdaa01d9a3d"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 입력을 3개로 복제 + 각자 필요한 데이터 stub\nconst b = $('Webhook /verdict').first().json.body;\nreturn [\n  {json:{...b, agent:'price', price:100, ma20:95, rsi:55, macd:0.3}},\n  {json:{...b, agent:'news', avg_sent:0.4, avg_impact:0.6, headlines:'(W3에서 fetch)'}},\n  {json:{...b, agent:'chart', chart_summary:'(W4 verdict 시트 fetch)'}},\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        0
+      ],
+      "id": "bab87c5e-1cf6-4d30-916d-c9e52705af83",
+      "name": "Fanout to 3 agents"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.agent}}",
+                    "rightValue": "price",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "price"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.agent}}",
+                    "rightValue": "news",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "news"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.agent}}",
+                    "rightValue": "chart",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "chart"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        80,
+        0
+      ],
+      "id": "f9fd3a98-66e5-4a2b-ab97-ca0458c925f0",
+      "name": "Switch by agent"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{$credentials.anthropicApi.apiKey}}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1024, \"messages\": [{\"role\": \"user\", \"content\": \"너는 가격·기술적 지표 분석가다.\\n종목: {{$json.ticker}} · 질문: {{$json.question}}\\n데이터: 현재가 {{$json.price}}, MA20 {{$json.ma20}}, RSI14 {{$json.rsi}}, MACD {{$json.macd}}\\n\\nJSON만 응답: {\\\"score\\\":-1.0~1.0, \\\"reason\\\":\\\"한 문장\\\", \\\"confidence\\\":0.0~1.0}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        -200
+      ],
+      "id": "5f9fa6d2-11b0-40d7-b706-98e1797a401f",
+      "name": "Price Agent"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{$credentials.anthropicApi.apiKey}}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1024, \"messages\": [{\"role\": \"user\", \"content\": \"너는 뉴스 센티먼트 분석가다.\\n종목: {{$json.ticker}} · 질문: {{$json.question}}\\n최근 24h 뉴스 평균: sentiment {{$json.avg_sent}}, impact {{$json.avg_impact}}\\n주요 헤드라인: {{$json.headlines}}\\n\\nJSON만 응답: {\\\"score\\\":-1.0~1.0, \\\"reason\\\":\\\"한 문장\\\", \\\"confidence\\\":0.0~1.0}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        0
+      ],
+      "id": "980cefdb-62cb-4b62-9dd4-15e02052c7db",
+      "name": "News Agent"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{$credentials.anthropicApi.apiKey}}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1024, \"messages\": [{\"role\": \"user\", \"content\": \"너는 차트 패턴 분석가다.\\n종목: {{$json.ticker}} · 질문: {{$json.question}}\\nW4 차트 의견 요약: {{$json.chart_summary}}\\n\\nJSON만 응답: {\\\"score\\\":-1.0~1.0, \\\"reason\\\":\\\"한 문장\\\", \\\"confidence\\\":0.0~1.0}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        200
+      ],
+      "id": "f3b8798a-11e7-4f01-a1ec-cd4d3ef4c0d5",
+      "name": "Chart Agent"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        580,
+        0
+      ],
+      "id": "9c5e6af9-c4e4-4035-bb81-621736972301",
+      "name": "Merge 3 opinions"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 3개 응답에서 score + reason 추출 → 1개 row로 정리\nconst parsed = items.map(it => {\n  const txt = it.json?.content?.[0]?.text || '{}';\n  const m = txt.match(/\\{[\\s\\S]*\\}/);\n  return m ? JSON.parse(m[0]) : {score:0, reason:'', confidence:0};\n});\nconst orig = $('Webhook /verdict').first().json.body;\nreturn [{json:{\n  ticker: orig.ticker,\n  p_score: parsed[0].score, p_reason: parsed[0].reason,\n  n_score: parsed[1].score, n_reason: parsed[1].reason,\n  c_score: parsed[2].score, c_reason: parsed[2].reason,\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ],
+      "id": "cfb913c3-be01-4995-9204-8260f98a84f3",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{$credentials.anthropicApi.apiKey}}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-sonnet-4-5-20250929\", \"max_tokens\": 1024, \"messages\": [{\"role\": \"user\", \"content\": \"너는 투자 의견 종합자다. 3 전문가 의견을 받아 최종 판단.\\n\\n종목: {{$json.ticker}}\\n\\n[가격]  score {{$json.p_score}} | {{$json.p_reason}}\\n[뉴스]  score {{$json.n_score}} | {{$json.n_reason}}\\n[차트]  score {{$json.c_score}} | {{$json.c_reason}}\\n\\nJSON만:\\n{\\n  \\\"verdict\\\": \\\"BUY_STRONG|BUY_WEAK|HOLD|SELL_WEAK|SELL_STRONG\\\",\\n  \\\"agreement\\\": \\\"all_agree|2of3|disagree\\\",\\n  \\\"summary\\\": \\\"2~3문장 종합 의견\\\"\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "6ccd78d6-c496-4eef-b5ce-2b549211965d",
+      "name": "Orchestrator"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "의견이력"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1280,
+        -100
+      ],
+      "id": "31abce44-03b7-4a1b-8214-b131d0a8a211",
+      "name": "Append 의견이력"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1280,
+        100
+      ],
+      "id": "656463a4-71ec-44a5-9c01-5825ad233f32",
+      "name": "Reply"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook /verdict": {
+      "main": [
+        [
+          {
+            "node": "Fanout to 3 agents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fanout to 3 agents": {
+      "main": [
+        [
+          {
+            "node": "Switch by agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch by agent": {
+      "main": [
+        [
+          {
+            "node": "Price Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "News Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Chart Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Price Agent": {
+      "main": [
+        [
+          {
+            "node": "Merge 3 opinions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "News Agent": {
+      "main": [
+        [
+          {
+            "node": "Merge 3 opinions",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Chart Agent": {
+      "main": [
+        [
+          {
+            "node": "Merge 3 opinions",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge 3 opinions": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Append 의견이력",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b5bb34e8-0272-41e5-b1d7-5ca9ffd18355",
+  "id": "312fdc49-6a47-4e",
+  "tags": []
+}

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W3 — 뉴스 센티먼트 분석</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="hero">
+  <div class="hero-badge">Week 3 · 🟢 과제 5</div>
+  <h1>뉴스 센티먼트 2차원 분석</h1>
+  <p class="hero-sub">Alpha Vantage NEWS_SENTIMENT + Claude Haiku — 감정(sentiment) × 영향도(impact)</p>
+</div>
+
+<div class="container">
+
+<section>
+  <div class="eyebrow">목표</div>
+  <h2>이번 주 목표</h2>
+  <p>뉴스가 종목에 <strong>좋은 뉴스/나쁜 뉴스인지</strong> + <strong>실제로 가격을 움직일 만한 뉴스인지</strong> 두 축으로 점수화. 단순 긍정/부정 1차원이 아닌 2차원 매트릭스로 매매 신호 강도 결정.</p>
+</section>
+
+<section>
+  <div class="eyebrow">2D Framework</div>
+  <h2>2차원 분석 프레임</h2>
+  <table>
+    <thead><tr><th>축</th><th>범위</th><th>의미</th></tr></thead>
+    <tbody>
+      <tr><td>sentiment</td><td>-1 (부정) ~ +1 (긍정)</td><td>뉴스 톤. Alpha Vantage가 1차 점수 제공, Claude가 재검증</td></tr>
+      <tr><td>impact</td><td>0 (가십) ~ 1 (실적/M&amp;A 등 가격 움직임)</td><td>주가에 영향 줄 만한가. Claude만 판단 (Alpha Vantage에 없음)</td></tr>
+    </tbody>
+  </table>
+  <div class="callout info">
+    <strong>왜 2D인가:</strong> "삼성전자 사장 점심 메뉴" = sentiment 0, impact 0 → 무시.<br>
+    "삼성전자 HBM3E NVIDIA 단독 공급" = sentiment +0.8, impact 0.9 → 강한 매수 신호.
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Workflow</div>
+  <h2>워크플로우 흐름</h2>
+  <div class="flow">
+    <div class="flow-step"><span class="node n-trig">🔴 Trigger</span><span class="arrow">→</span>
+      <span class="flow-desc">Schedule (매시간) 또는 Webhook</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 HTTP</span><span class="arrow">→</span>
+      <span class="flow-desc">Alpha Vantage NEWS_SENTIMENT — 관심종목 ticker로 24h 뉴스 + 1차 sentiment</span></div>
+    <div class="flow-step"><span class="node n-logic">⚫ Filter</span><span class="arrow">→</span>
+      <span class="flow-desc">최근 24h만 + 종목 relevance &gt; 0.3만 통과</span></div>
+    <div class="flow-step"><span class="node n-ai">🟣 Claude Haiku</span><span class="arrow">→</span>
+      <span class="flow-desc">각 뉴스를 (sentiment, impact, reason) JSON으로 재분류</span></div>
+    <div class="flow-step"><span class="node n-out">🟢 Sheets</span><span class="arrow">→</span>
+      <span class="flow-desc">뉴스이력 시트 append + 강한 신호(impact ≥ 0.7)는 Slack 즉시 알림</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Prompt</div>
+  <h2>Claude Haiku 프롬프트</h2>
+  <pre>너는 주식 뉴스 분석가다. 아래 뉴스가 종목 {{ticker}}에 미치는 영향을 평가하라.
+
+뉴스 제목: {{title}}
+뉴스 요약: {{summary}}
+출처: {{source}}
+
+다음 JSON으로만 응답:
+{
+  "sentiment": -1.0 ~ 1.0,        // 음수=부정, 양수=긍정, 0=중립
+  "impact": 0.0 ~ 1.0,            // 가격을 움직일 가능성
+  "category": "earnings|product|m&amp;a|regulation|ceo|opinion|other",
+  "reason": "한 문장 근거 (한국어)"
+}
+
+판정 가이드:
+- 실적·가이던스·M&amp;A·규제 → impact 0.7+
+- 단순 시장 코멘트·외부 의견 → impact 0.2 이하
+- 경쟁사/업종 뉴스가 본 종목에 직접 영향 시 sentiment 부호 주의</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Output</div>
+  <h2>출력 시트 — 뉴스이력</h2>
+  <table>
+    <thead><tr><th>컬럼</th><th>예시</th></tr></thead>
+    <tbody>
+      <tr><td>일시</td><td>2026-04-29 14:32</td></tr>
+      <tr><td>ticker</td><td>005930.KS</td></tr>
+      <tr><td>title</td><td>삼성전자, NVIDIA HBM3E 단독 공급 계약</td></tr>
+      <tr><td>av_sentiment</td><td>0.72 (Alpha Vantage 원점수)</td></tr>
+      <tr><td>claude_sentiment</td><td>0.85</td></tr>
+      <tr><td>claude_impact</td><td>0.92</td></tr>
+      <tr><td>category</td><td>product</td></tr>
+      <tr><td>reason</td><td>HBM3E 단독 공급은 매출 가시성 크게 상승</td></tr>
+      <tr><td>signal_strength</td><td>높음 (sentiment×impact = 0.78)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <div class="eyebrow">Missions</div>
+  <h2>🟢 과제 5개</h2>
+  <div class="missions">
+    <div class="mission"><div class="num">1</div><div class="body"><div class="t">Alpha Vantage 단독 호출</div><div class="d">관심종목 5개 ticker로 호출 → 응답 구조 파악, ticker_sentiment 배열 추출</div></div></div>
+    <div class="mission"><div class="num">2</div><div class="body"><div class="t">Claude 단독 분류</div><div class="d">뉴스 1건을 Claude Haiku에게 보내 JSON 응답 검증. response_format 강제</div></div></div>
+    <div class="mission"><div class="num">3</div><div class="body"><div class="t">2D 매트릭스 시각화</div><div class="d">Sheets에서 sentiment(가로) × impact(세로) 산점도 차트로 시각화</div></div></div>
+    <div class="mission"><div class="num">4</div><div class="body"><div class="t">강한 신호 알림</div><div class="d">impact ≥ 0.7 + |sentiment| ≥ 0.5인 뉴스만 본인 Slack에 즉시 push</div></div></div>
+    <div class="mission"><div class="num">5</div><div class="body"><div class="t">의견 일치도 분석</div><div class="d">av_sentiment vs claude_sentiment 차이가 큰 케이스 10건 수집해 어느 쪽이 맞았는지 사후 검증</div></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="navbar">
+    <a href="W2_technical_indicators.html">← W2: 기술적 지표</a>
+    <a href="W4_chart_vision.html">→ W4: 차트 Vision</a>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

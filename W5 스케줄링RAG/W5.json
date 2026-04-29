@@ -1,0 +1,480 @@
+{
+  "name": "W5 — 스케줄링 + Vector DB 기초",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -400,
+        -150
+      ],
+      "id": "04064e2d-b2eb-4185-967a-2533cda62d5a",
+      "name": "08:00 Pre-market"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 11 * * 1-5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "e17f2577-958b-4ac1-81d5-b3ce7c02ac88",
+      "name": "11:00 Mid-day"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 14 * * 1-5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -400,
+        150
+      ],
+      "id": "f2e50c63-034d-48ca-91f5-31fcfbb40521",
+      "name": "14:00 Pre-close"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 16 * * 1-5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -400,
+        300
+      ],
+      "id": "c50fb796-8bb7-435d-a520-b0eec46f05f6",
+      "name": "16:30 Post-market"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 어느 시각에서 왔는지 판단\nconst stage = $execution.customData?.run?.executionTime?.toString() || '';\nreturn [{json:{stage:'auto-detect', ts: new Date().toISOString()}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -150,
+        75
+      ],
+      "id": "00b1046e-267d-4c9e-a145-87ce2f9db374",
+      "name": "Stage Router"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "embed",
+        "responseMode": "responseNode"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -150
+      ],
+      "id": "e5f7782d-3c05-4b9f-8fd1-7ba5befa3489",
+      "name": "Webhook /embed",
+      "webhookId": "82e42294-c060-4b0a-b2da-8bb8d77fa736"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "text-embedding-3-small"
+            },
+            {
+              "name": "input",
+              "value": "={{$json.body.text}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer PUT_YOUR_OPENAI_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        -150
+      ],
+      "id": "c9e74af0-ca44-4252-b7be-5718786e704b",
+      "name": "OpenAI Embedding"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_SUPABASE.supabase.co/rest/v1/embeddings",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{$node['Webhook /embed'].json.body.text}}"
+            },
+            {
+              "name": "embedding",
+              "value": "={{$json.data[0].embedding}}"
+            },
+            {
+              "name": "metadata",
+              "value": "={{$node['Webhook /embed'].json.body.metadata || {}}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "PUT_YOUR_SUPABASE_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer PUT_YOUR_SUPABASE_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        -150
+      ],
+      "id": "4ae3d8b5-2488-47d2-8fa4-0965bad2a358",
+      "name": "Supabase Insert"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ask",
+        "responseMode": "responseNode"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        200
+      ],
+      "id": "3d034fe5-58d6-4ab6-8d28-24dc24a64444",
+      "name": "Webhook /ask",
+      "webhookId": "123164f2-955d-475a-92f3-d830424b7ba4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "text-embedding-3-small"
+            },
+            {
+              "name": "input",
+              "value": "={{$json.body.question}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer PUT_YOUR_OPENAI_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        200
+      ],
+      "id": "4b3e3d77-7432-471f-aec1-e67c5f41c9cd",
+      "name": "Embed Question"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_SUPABASE.supabase.co/rest/v1/rpc/match_documents",
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query_embedding",
+              "value": "={{$json.data[0].embedding}}"
+            },
+            {
+              "name": "match_count",
+              "value": 5
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "PUT_YOUR_SUPABASE_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer PUT_YOUR_SUPABASE_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        200
+      ],
+      "id": "e4d72cc5-a793-448f-836a-87982fbe78c9",
+      "name": "Supabase Search (RPC)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{$credentials.anthropicApi.apiKey}}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-haiku-4-5-20251001\", \"max_tokens\": 1024, \"messages\": [{\"role\": \"user\", \"content\": \"검색 결과만으로 답하라. 출처 인용 필수.\\n\\n질문: {{$node['Webhook /ask'].json.body.question}}\\n\\n검색결과:\\n{{$json}}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        200
+      ],
+      "id": "564e7c5a-99b8-4b7e-98eb-63491aab7167",
+      "name": "Claude Answer"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{$json.content[0].text}}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1180,
+        200
+      ],
+      "id": "929dbcca-15fb-46cb-a005-42bed2702aa2",
+      "name": "Reply"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "08:00 Pre-market": {
+      "main": [
+        [
+          {
+            "node": "Stage Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11:00 Mid-day": {
+      "main": [
+        [
+          {
+            "node": "Stage Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "14:00 Pre-close": {
+      "main": [
+        [
+          {
+            "node": "Stage Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "16:30 Post-market": {
+      "main": [
+        [
+          {
+            "node": "Stage Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook /embed": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embedding": {
+      "main": [
+        [
+          {
+            "node": "Supabase Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook /ask": {
+      "main": [
+        [
+          {
+            "node": "Embed Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed Question": {
+      "main": [
+        [
+          {
+            "node": "Supabase Search (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Search (RPC)": {
+      "main": [
+        [
+          {
+            "node": "Claude Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Answer": {
+      "main": [
+        [
+          {
+            "node": "Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "34465204-7acd-44fa-b38c-a92887340de3",
+  "id": "e5c8a281-8cb0-47",
+  "tags": []
+}

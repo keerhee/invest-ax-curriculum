@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W1 — 데이터 수집 자동화</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="hero">
+  <div class="hero-badge">Week 1 · 🟢 과제 5</div>
+  <h1>데이터 수집 자동화</h1>
+  <p class="hero-sub">CoinGecko · Yahoo Finance · FRED · Google Sheets — 본인 데이터레이크 구축</p>
+</div>
+
+<div class="container">
+
+<section>
+  <div class="eyebrow">목표</div>
+  <h2>이번 주 목표</h2>
+  <p>매일 아침 8시에 자동으로 <strong>관심종목 시세 + 매크로 지표 + 환율</strong>을 본인 Google Sheets에 누적 적재. 이게 모든 후속 주차의 입력 데이터가 됩니다.</p>
+  <ul>
+    <li>Yahoo Finance로 한국·미국 주식 시세 OHLCV</li>
+    <li>CoinGecko로 비트코인·이더리움 등 암호화폐 시세</li>
+    <li>FRED로 미국 10년물 금리, CPI 같은 매크로 지표</li>
+    <li>모두 같은 시트에 일자별로 append</li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Workflow</div>
+  <h2>워크플로우 흐름</h2>
+  <div class="flow">
+    <div class="flow-title">매일 08:00 KST · Cron 트리거 → 3개 데이터 소스 병렬 → Sheets append</div>
+    <div class="flow-step"><span class="node n-trig">🔴 Trigger</span><span class="arrow">→</span>
+      <span class="flow-desc"><strong>Schedule Trigger</strong> · Cron <code>0 8 * * 1-5</code> (평일 08:00)</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 HTTP A</span><span class="arrow">→</span>
+      <span class="flow-desc"><strong>Yahoo Finance</strong> — 종목마스터 시트의 ticker 리스트 → query API 호출</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 HTTP B</span><span class="arrow">→</span>
+      <span class="flow-desc"><strong>CoinGecko</strong> — <code>/simple/price</code> 비트코인·이더리움 USD/KRW 동시</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 HTTP C</span><span class="arrow">→</span>
+      <span class="flow-desc"><strong>FRED</strong> — DGS10 (미 10년물 금리) · DEXKOUS (원/달러)</span></div>
+    <div class="flow-step"><span class="node n-logic">⚫ Code</span><span class="arrow">→</span>
+      <span class="flow-desc"><strong>Merge + Normalize</strong> — 3개 소스를 동일 스키마로 정규화</span></div>
+    <div class="flow-step"><span class="node n-out">🟢 Sheets</span><span class="arrow">→</span>
+      <span class="flow-desc"><strong>Append rows</strong> — 시세이력 시트에 누적</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Sheet</div>
+  <h2>입력 시트 — 종목마스터</h2>
+  <table>
+    <thead><tr><th>컬럼</th><th>예시</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td>ticker</td><td>005930.KS</td><td>Yahoo 형식 (한국: <code>.KS</code> · 코스닥: <code>.KQ</code>)</td></tr>
+      <tr><td>name</td><td>삼성전자</td><td>표시용</td></tr>
+      <tr><td>asset_type</td><td>stock_kr</td><td>stock_kr / stock_us / crypto / macro</td></tr>
+      <tr><td>active</td><td>TRUE</td><td>FALSE면 수집 제외</td></tr>
+    </tbody>
+  </table>
+  <p>출력 시트(시세이력)는 워크플로우가 자동 생성. 컬럼: <code>date · ticker · open · high · low · close · volume · source</code></p>
+</section>
+
+<section>
+  <div class="eyebrow">API</div>
+  <h2>API 호출 예시</h2>
+
+  <h3>Yahoo Finance (key 불필요)</h3>
+  <pre>GET https://query1.finance.yahoo.com/v8/finance/chart/005930.KS
+  ?interval=1d&range=5d</pre>
+
+  <h3>CoinGecko</h3>
+  <pre>GET https://api.coingecko.com/api/v3/simple/price
+  ?ids=bitcoin,ethereum&vs_currencies=usd,krw</pre>
+
+  <h3>FRED</h3>
+  <pre>GET https://api.stlouisfed.org/fred/series/observations
+  ?series_id=DGS10
+  &api_key={YOUR_KEY}
+  &file_type=json
+  &observation_start=2026-01-01</pre>
+</section>
+
+<section>
+  <div class="eyebrow">Missions</div>
+  <h2>🟢 과제 5개</h2>
+  <div class="missions">
+    <div class="mission"><div class="num">1</div><div class="body"><div class="t">종목마스터 시트 만들기</div><div class="d">본인 관심종목 한국 5개 + 미국 5개 + 암호화폐 2개 등록</div></div></div>
+    <div class="mission"><div class="num">2</div><div class="body"><div class="t">Yahoo 노드 단독 검증</div><div class="d">trigger 끄고 manual execute로 OHLCV가 정확히 들어오는지 확인</div></div></div>
+    <div class="mission"><div class="num">3</div><div class="body"><div class="t">3 소스 동시 수집</div><div class="d">Yahoo + CoinGecko + FRED를 동일 트리거에서 병렬 실행, Merge 노드까지 연결</div></div></div>
+    <div class="mission"><div class="num">4</div><div class="body"><div class="t">중복 방지 로직</div><div class="d">같은 날짜의 같은 ticker가 두 번 들어가지 않도록 Code 노드에서 dedup</div></div></div>
+    <div class="mission"><div class="num">5</div><div class="body"><div class="t">매일 자동 발화 + 알림</div><div class="d">Cron으로 평일 08:00 자동 실행, 완료 시 본인 Slack/Mail로 "오늘 N건 수집" 통지</div></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Pitfalls</div>
+  <h2>흔한 함정</h2>
+  <ul>
+    <li><strong>Yahoo Rate limit</strong> — 분당 100회 정도. 종목 많으면 chunk 단위로 끊고 Wait 노드 추가</li>
+    <li><strong>휴장일</strong> — 데이터가 비어 옴. Code 노드에서 빈 응답 무시 처리</li>
+    <li><strong>FRED 시계열 갱신 시점</strong> — 일별 지표는 D+1 발표. 오늘 호출하면 어제 값까지만</li>
+    <li><strong>시간대</strong> — Cron은 n8n 서버 timezone 기준. Self-host면 <code>TZ=Asia/Seoul</code> 환경변수</li>
+  </ul>
+</section>
+
+<section>
+  <div class="navbar">
+    <a href="01_prereq.html">← 사전 준비</a>
+    <a href="W2_technical_indicators.html">→ W2: 기술적 지표</a>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,300 @@
+{
+  "name": "W4 — 차트 Vision + 3D Verdict",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "verdict",
+        "responseMode": "responseNode"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "670c59af-19b4-410d-ab6d-2fa920325314",
+      "name": "Webhook (verdict 요청)",
+      "webhookId": "4bb02ef4-3b03-489f-a8a7-d863bd60e976"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.chart-img.com/v2/tradingview/advanced-chart?symbol=NASDAQ:{{$json.ticker}}&interval=1D&theme=dark&width=1200&height=700&studies=RSI,MACD,BB&api_key=PUT_YOUR_CHARTIMG_KEY",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -180,
+        -100
+      ],
+      "id": "f8e300e6-e9f6-4ced-a8d6-fe3a960cd03e",
+      "name": "Chart-IMG 요청"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{$credentials.anthropicApi.apiKey}}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-sonnet-4-5-20250929\", \"max_tokens\": 1024, \"messages\": [{\"role\": \"user\", \"content\": \"첨부된 일봉 차트(RSI·MACD·볼린저 포함)를 분석하라. JSON만 응답:\\n{\\n  \\\"trend\\\": \\\"uptrend|downtrend|sideways\\\",\\n  \\\"pattern\\\": \\\"head_shoulders|double_top|double_bottom|breakout|consolidation|none\\\",\\n  \\\"support\\\": 가격, \\\"resistance\\\": 가격,\\n  \\\"chart_score\\\": -1.0~1.0,\\n  \\\"key_signals\\\": [\\\"...\\\"]\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        60,
+        -100
+      ],
+      "id": "2cba65d5-0b58-4d2a-8a9b-bc5f74ee9cf5",
+      "name": "Claude Vision"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 실제로는 W2 지표이력 시트에서 ticker 최신행 조회\n// 데모용: 간단 점수\nconst ticker = $('Webhook (verdict 요청)').first().json.body.ticker;\nreturn [{json:{ticker, priceScore: 0.4, priceReason: 'MA20 위·RSI 58'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        50
+      ],
+      "id": "a9558fca-f950-41ce-9187-708880c0791e",
+      "name": "Lookup Price (W2)"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const ticker = $('Webhook (verdict 요청)').first().json.body.ticker;\nreturn [{json:{ticker, newsScore: 0.6, newsReason: '실적 호조 뉴스 다수'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        200
+      ],
+      "id": "ec0bd3a8-bf69-41f2-b57f-1f3019876132",
+      "name": "Lookup News (W3)"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Vision 응답 파싱\nconst vTxt = $('Claude Vision').first()?.json?.content?.[0]?.text || '{}';\nconst vM = vTxt.match(/\\{[\\s\\S]*\\}/);\nconst v = vM ? JSON.parse(vM[0]) : {chart_score:0};\n\nconst p = $('Lookup Price (W2)').first().json;\nconst n = $('Lookup News (W3)').first().json;\n\nreturn [{json:{\n  ticker: p.ticker,\n  priceScore: p.priceScore, priceReason: p.priceReason,\n  newsScore: n.newsScore, newsReason: n.newsReason,\n  chartScore: v.chart_score, chartReason: (v.key_signals||[]).join(', '),\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        50
+      ],
+      "id": "3527d9db-3e03-4e1e-ac58-2adf9b904d3e",
+      "name": "Parse Vision + Merge"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{$credentials.anthropicApi.apiKey}}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-sonnet-4-5-20250929\", \"max_tokens\": 1024, \"messages\": [{\"role\": \"user\", \"content\": \"3개 신호를 받아 최종 판단 내려라. JSON만:\\n\\n종목: {{$json.ticker}}\\nPRICE: {{$json.priceScore}} ({{$json.priceReason}})\\nNEWS:  {{$json.newsScore}} ({{$json.newsReason}})\\nCHART: {{$json.chartScore}} ({{$json.chartReason}})\\n\\n응답:\\n{\\n  \\\"verdict\\\": \\\"BUY_STRONG|BUY_WEAK|HOLD|SELL_WEAK|SELL_STRONG\\\",\\n  \\\"agreement\\\": \\\"all_agree|2of3|disagree\\\",\\n  \\\"summary\\\": \\\"2~3문장 종합 의견\\\"\\n}\"}]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        540,
+        50
+      ],
+      "id": "eb24c221-916a-4dd7-8cc1-0fee107dfa9d",
+      "name": "Claude Verdict"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PUT_YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "verdict"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        780,
+        50
+      ],
+      "id": "e81b185b-3167-4688-b56d-4a5f149cf811",
+      "name": "Append verdict"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1020,
+        50
+      ],
+      "id": "0a6f07e1-7fdc-4a2e-901c-1c90b66d0a91",
+      "name": "Webhook 응답"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook (verdict 요청)": {
+      "main": [
+        [
+          {
+            "node": "Chart-IMG 요청",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Lookup Price (W2)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Lookup News (W3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chart-IMG 요청": {
+      "main": [
+        [
+          {
+            "node": "Claude Vision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Vision": {
+      "main": [
+        [
+          {
+            "node": "Parse Vision + Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Price (W2)": {
+      "main": [
+        [
+          {
+            "node": "Parse Vision + Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup News (W3)": {
+      "main": [
+        [
+          {
+            "node": "Parse Vision + Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Vision + Merge": {
+      "main": [
+        [
+          {
+            "node": "Claude Verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Verdict": {
+      "main": [
+        [
+          {
+            "node": "Append verdict",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook 응답",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1370ea27-768b-41a6-9201-84eb1ffc622c",
+  "id": "5296b9d8-881e-4f",
+  "tags": []
+}

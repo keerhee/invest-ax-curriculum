@@ -160,6 +160,179 @@ Authorization: Bearer {COHERE_KEY}
   </div>
 </section>
 
+<!-- ════════════════════════════════════════ -->
+<!-- 💎 BONUS: Qdrant Native Hybrid Search    -->
+<!-- ════════════════════════════════════════ -->
+<section style="border-top:3px double #d97706;padding-top:30px;margin-top:30px">
+  <div class="eyebrow" style="color:#d97706">💎 Bonus Session</div>
+  <h2>Qdrant Native Hybrid + 금융 응용 실습</h2>
+  <p>본 주차 본편은 Supabase pgvector + ts_rank로 hybrid를 구현했지만, <strong>Qdrant 1.10+</strong>는
+    동일한 흐름을 <strong>한 번의 API 호출</strong>로 끝내는 native hybrid를 제공합니다. 사업보고서·공시·
+    애널리스트 리포트 검색에 그대로 적용해봅시다.</p>
+
+  <div class="callout info">
+    <strong>참조 영상</strong>:
+    <a href="https://www.youtube.com/watch?v=7LEhwjETnu4" target="_blank" rel="noopener">Hybrid Search in Legal AI with Qdrant &amp; n8n</a> (Qdrant 공식)
+    · <a href="https://youtu.be/QuDGpV9Nhzc" target="_blank" rel="noopener">Qdrant Hybrid Search Tutorial</a>
+    · <a href="https://youtu.be/pssHxg8GDFc" target="_blank" rel="noopener">How to Set Up and Use Qdrant for Hybrid Search</a>
+    <br>본 세션은 위 영상들의 Legal 도메인을 <strong>금융 도메인</strong>(사업보고서·공시·IR)으로 치환한 응용 실습입니다.
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">왜 Qdrant Hybrid?</div>
+  <h2>1. Supabase 방식 vs Qdrant Native 비교</h2>
+  <table>
+    <thead><tr><th>항목</th><th>Supabase pgvector + ts_rank</th><th>Qdrant Native Hybrid</th></tr></thead>
+    <tbody>
+      <tr><td>호출 횟수</td><td>2회 (vector + BM25 따로)</td><td><strong>1회</strong> (Query API prefetch)</td></tr>
+      <tr><td>RRF 결합</td><td>n8n Code 노드에서 수동</td><td><strong>서버 측 자동</strong></td></tr>
+      <tr><td>Sparse 모델</td><td>Postgres 한국어 형태소 한계</td><td><strong>BM25 / SPLADE 선택</strong></td></tr>
+      <tr><td>한국어 처리</td><td>tsvector 한계 (조사 처리)</td><td>fastembed 다국어 가능</td></tr>
+      <tr><td>스케일</td><td>500MB 무료, 단일 PG</td><td>1GB 무료, 분산 가능</td></tr>
+      <tr><td>학습 곡선</td><td>SQL 익숙하면 쉬움</td><td>Named vector 개념 필요</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <div class="eyebrow">Architecture</div>
+  <h2>2. Named Vectors — 하나의 컬렉션, 두 개의 벡터</h2>
+  <pre>collection: "invest_disclosures"
+  named vectors:
+    - name: "dense"
+      size: 1536
+      distance: Cosine          # OpenAI text-embedding-3-small
+    - name: "sparse"
+      modifier: idf              # BM25 내장 IDF
+      # sparse vector indices/values 형식
+  payload:
+    - ticker, doc_type, doc_year, page, section, content</pre>
+  <p>임베딩 단계에서 <strong>한 청크당 dense + sparse 두 벡터</strong>를 동시에 저장. 검색은 둘을 한 호출로.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Workflow</div>
+  <h2>3. n8n 워크플로우 흐름</h2>
+
+  <h3>(A) 임베딩 (PDF 업로드 시 1회)</h3>
+  <div class="flow">
+    <div class="flow-step"><span class="node n-trig">🔴 Trigger</span><span class="arrow">→</span>
+      <span class="flow-desc">Drive Trigger — 사업보고서 PDF 업로드</span></div>
+    <div class="flow-step"><span class="node n-act">🔵 Extract</span><span class="arrow">→</span>
+      <span class="flow-desc">PDF → 텍스트 → 1000자 청크 (overlap 200)</span></div>
+    <div class="flow-step"><span class="node n-ai">🟣 Dense</span><span class="arrow">→</span>
+      <span class="flow-desc">OpenAI text-embedding-3-small (1536d)</span></div>
+    <div class="flow-step"><span class="node n-ai">🟣 Sparse</span><span class="arrow">→</span>
+      <span class="flow-desc">FastEmbed BM25 (서버 함수 또는 HTTP)</span></div>
+    <div class="flow-step"><span class="node n-store">🟢 Upsert</span><span class="arrow">→</span>
+      <span class="flow-desc">Qdrant /points (vectors: {dense, sparse} 동시)</span></div>
+  </div>
+
+  <h3>(B) 검색 (질의)</h3>
+  <div class="flow">
+    <div class="flow-step"><span class="node n-trig">🔴 Trigger</span><span class="arrow">→</span>
+      <span class="flow-desc">Webhook — 자연어 질의</span></div>
+    <div class="flow-step"><span class="node n-ai">🟣 Embed × 2</span><span class="arrow">→</span>
+      <span class="flow-desc">Dense (OpenAI) + Sparse (BM25) 동시 생성</span></div>
+    <div class="flow-step"><span class="node n-store">🟢 Hybrid Q</span><span class="arrow">→</span>
+      <span class="flow-desc">Qdrant /points/query — prefetch [dense, sparse] + RRF fusion 한 번에</span></div>
+    <div class="flow-step"><span class="node n-ai">🟣 Answer</span><span class="arrow">→</span>
+      <span class="flow-desc">Claude — top-K로 인용 답변</span></div>
+    <div class="flow-step"><span class="node n-out">🟢 Reply</span><span class="arrow">→</span>
+      <span class="flow-desc">Slack / Webhook 응답</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">API</div>
+  <h2>4. Qdrant Hybrid Query API (한 번의 호출)</h2>
+  <h3>컬렉션 생성</h3>
+  <pre>PUT https://YOUR-CLUSTER.qdrant.tech/collections/invest_disclosures
+{
+  "vectors": {
+    "dense": { "size": 1536, "distance": "Cosine" }
+  },
+  "sparse_vectors": {
+    "sparse": { "modifier": "idf" }
+  }
+}</pre>
+
+  <h3>임베딩 upsert</h3>
+  <pre>PUT /collections/invest_disclosures/points
+{
+  "points": [{
+    "id": 1,
+    "vector": {
+      "dense":  [0.12, -0.05, ...1536개],
+      "sparse": { "indices": [42, 1024, ...], "values": [0.7, 0.3, ...] }
+    },
+    "payload": {
+      "ticker": "005930",
+      "doc_type": "사업보고서", "doc_year": 2024, "page": 187,
+      "section": "연구개발 활동", "content": "..."
+    }
+  }]
+}</pre>
+
+  <h3>Hybrid Search (RRF 한 번에)</h3>
+  <pre>POST /collections/invest_disclosures/points/query
+{
+  "prefetch": [
+    { "query": [0.12, -0.05, ...], "using": "dense",  "limit": 20 },
+    { "query": {"indices":[...], "values":[...]}, "using": "sparse", "limit": 20 }
+  ],
+  "query": { "fusion": "rrf" },
+  "limit": 5,
+  "with_payload": true,
+  "filter": { "must": [{"key": "ticker", "match": {"value": "005930"}}] }
+}</pre>
+  <p>응답은 두 검색의 RRF 결합 top-5. <code>"fusion": "dbsf"</code>로 distribution-based score fusion도 선택 가능.</p>
+</section>
+
+<section>
+  <div class="eyebrow">금융 응용</div>
+  <h2>5. 어떤 질문에 어느 쪽이 강한가</h2>
+  <table>
+    <thead><tr><th>금융 질의</th><th>Dense만</th><th>BM25만</th><th>Hybrid</th></tr></thead>
+    <tbody>
+      <tr><td>"삼성전자 24년 R&amp;D 투자액은?" (정확 숫자)</td><td>△ 비슷한 분기 섞임</td><td>✅ 정확 페이지</td><td>✅</td></tr>
+      <tr><td>"AI 메모리 사이클 전망" (의미)</td><td>✅ 동의어 잡음</td><td>❌ 키워드 한정</td><td>✅</td></tr>
+      <tr><td>"HBM3E 단독공급" (고유명사)</td><td>△ 일반화됨</td><td>✅ 정확</td><td>✅</td></tr>
+      <tr><td>"지배구조 ESG 리스크" (개념)</td><td>✅ 의미 검색</td><td>△ 표현 다양</td><td>✅</td></tr>
+      <tr><td>"공시번호 20240315000123" (식별자)</td><td>❌</td><td>✅ exact</td><td>✅</td></tr>
+    </tbody>
+  </table>
+  <div class="callout green">
+    <strong>핵심 인사이트</strong> — IR/공시는 <strong>숫자·고유명사·식별자</strong>가 많아 BM25가 강하고,
+    <strong>전략 변화·리스크·시장 전망</strong>은 의미 검색이 강합니다. Hybrid가 둘 다 잡습니다.
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Bonus Missions</div>
+  <h2>💎 보너스 과제 5개</h2>
+  <div class="missions">
+    <div class="mission"><div class="num">1</div><div class="body"><div class="t">Qdrant 컬렉션 생성</div><div class="d">named vectors (dense 1536 + sparse idf) 컬렉션을 cloud.qdrant.io에서 생성. cluster info 확인</div></div></div>
+    <div class="mission"><div class="num">2</div><div class="body"><div class="t">FastEmbed BM25 호출</div><div class="d">Qdrant FastEmbed 서버 또는 Python 함수로 한국어 토큰 sparse 벡터 생성. n8n Code 노드에서 indices/values 추출</div></div></div>
+    <div class="mission"><div class="num">3</div><div class="body"><div class="t">관심종목 3개 PDF 임베딩</div><div class="d">삼성전자·SK하이닉스·NAVER 사업보고서 PDF를 dense+sparse 동시에 upsert. 청크 총 수 확인</div></div></div>
+    <div class="mission"><div class="num">4</div><div class="body"><div class="t">5개 질의 비교 실험</div><div class="d">위 표의 5개 질의를 Dense만 / BM25만 / Hybrid 세 모드로 각각 호출, top-5 결과의 page 비교. 응답 시간도 측정</div></div></div>
+    <div class="mission"><div class="num">5</div><div class="body"><div class="t">RRF vs DBSF 비교</div><div class="d">동일 질의를 fusion=rrf와 fusion=dbsf로 호출해 결과 차이 분석. 본인이 채점한 정확도 점수 표 작성</div></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Tools</div>
+  <h2>도움 자료</h2>
+  <ul>
+    <li><strong>Qdrant Cloud</strong> — <a href="https://cloud.qdrant.io" target="_blank">cloud.qdrant.io</a> (무료 1GB)</li>
+    <li><strong>Qdrant Hybrid Docs</strong> — <a href="https://qdrant.tech/documentation/concepts/hybrid-queries/" target="_blank">qdrant.tech/documentation/concepts/hybrid-queries</a></li>
+    <li><strong>FastEmbed</strong> — <a href="https://github.com/qdrant/fastembed" target="_blank">github.com/qdrant/fastembed</a> (BM25 sparse 모델 내장)</li>
+    <li><strong>n8n Qdrant 노드</strong> — Vector Store 카테고리에 native 노드 (1.50+) 또는 HTTP Request로 직접</li>
+    <li><strong>실습 자료</strong> — 본 폴더의 <code>W6_BONUS_qdrant_hybrid.json</code> + <code>W6_BONUS_샘플질의.xlsx</code></li>
+  </ul>
+</section>
+
 <section>
   <div class="navbar">
     <a href="W5_scheduling_rag.html">← W5: 스케줄링 + RAG</a>

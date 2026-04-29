@@ -1,0 +1,279 @@
+{
+  "name": "W6 BONUS — Qdrant Native Hybrid (Dense + BM25 + RRF)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "qdrant-hybrid",
+        "responseMode": "responseNode"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        0
+      ],
+      "id": "7b06f895-bfa3-43ff-8ce0-05def5747958",
+      "name": "Webhook /hybrid",
+      "webhookId": "322b730a-5c81-4924-9dfa-112a92e1b686"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"text-embedding-3-small\", \"input\": \"={{$json.body.question}}\"}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer PUT_YOUR_OPENAI_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -260,
+        -120
+      ],
+      "id": "822b92a2-5e53-4985-ac6a-2d95c6f5b3ed",
+      "name": "Dense Embed (OpenAI)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8000/embed_sparse",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"text\": \"={{$json.body.question}}\", \"model\": \"Qdrant/bm25\"}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -260,
+        100
+      ],
+      "id": "e8aec00b-5e5b-4dc7-8790-2117cfbc6081",
+      "name": "Sparse Embed (FastEmbed)"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Dense + Sparse 를 합쳐 Qdrant /points/query 본문 생성\nconst dense = $('Dense Embed (OpenAI)').first().json.data[0].embedding;\nconst sparse = $('Sparse Embed (FastEmbed)').first().json;  // {indices, values}\nconst orig = $('Webhook /hybrid').first().json.body;\n\nconst tickerFilter = orig.ticker\n  ? { must: [{ key: 'ticker', match: { value: orig.ticker } }] }\n  : undefined;\n\nreturn [{json:{\n  prefetch: [\n    { query: dense,                                    using: 'dense',  limit: 20 },\n    { query: { indices: sparse.indices, values: sparse.values }, using: 'sparse', limit: 20 }\n  ],\n  query:  { fusion: orig.fusion || 'rrf' },\n  limit:  orig.top_k || 5,\n  with_payload: true,\n  filter: tickerFilter\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5f8fcde8-4866-4bdd-8c9d-0eb8f3b77cf9",
+      "name": "Build Hybrid Query"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR-CLUSTER.qdrant.tech/collections/invest_disclosures/points/query",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api-key",
+              "value": "PUT_YOUR_QDRANT_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "9f08667a-2c15-4f77-b3ec-898dda6abb9e",
+      "name": "Qdrant Hybrid Query"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Qdrant 결과 → Claude 컨텍스트로\nconst points = $json.result.points || [];\nconst ctx = points.map((p, i) => {\n  const pl = p.payload || {};\n  return `[${i+1}] ${pl.ticker || ''} ${pl.doc_type || ''} ${pl.doc_year || ''} p.${pl.page || '?'} (${pl.section || ''}): ${pl.content || ''}`;\n}).join('\\n\\n');\nreturn [{json:{ context: ctx, count: points.length }}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        0
+      ],
+      "id": "8b57ec99-3fd8-498c-a21a-0887fff383a8",
+      "name": "Format Context"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"model\": \"claude-sonnet-4-5-20250929\", \"max_tokens\": 1024, \"messages\": [{\"role\": \"user\", \"content\": \"너는 IR 분석가다. 검색 결과만으로 답변하고, 모든 주장에 [숫자] 형식 출처 인용 필수.\\n\\n질문: {{$node['Webhook /hybrid'].json.body.question}}\\n\\n검색결과:\\n{{$json.context}}\\n\\n답변:\"}]}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "PUT_YOUR_ANTHROPIC_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        0
+      ],
+      "id": "be9d35f1-45a2-4104-8899-14575c9970c0",
+      "name": "Claude Cite Answer"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {answer: $json.content[0].text, sources: $node['Format Context'].json.count} }}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "bf0bccff-9926-4660-9a9f-d4a34f9c4157",
+      "name": "Reply"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook /hybrid": {
+      "main": [
+        [
+          {
+            "node": "Dense Embed (OpenAI)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sparse Embed (FastEmbed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dense Embed (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Build Hybrid Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sparse Embed (FastEmbed)": {
+      "main": [
+        [
+          {
+            "node": "Build Hybrid Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Hybrid Query": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Hybrid Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Hybrid Query": {
+      "main": [
+        [
+          {
+            "node": "Format Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Context": {
+      "main": [
+        [
+          {
+            "node": "Claude Cite Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Cite Answer": {
+      "main": [
+        [
+          {
+            "node": "Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d4ee62a2-8347-41d5-83c2-e01d72cceb33",
+  "id": "43758644-4331-4f",
+  "tags": []
+}
